@@ -1,16 +1,16 @@
 "use client";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { FiLogIn, FiMail, FiLock, FiAlertCircle } from "react-icons/fi";
+import { FiLogIn, FiMail, FiLock, FiAlertCircle, FiUserPlus } from "react-icons/fi";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../../firebase/config";
+import { loginWithEmail, registerWithEmail } from "../../firebase/auth";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState(""); // 新規登録時のみ使用
   const [error, setError] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -25,37 +25,44 @@ export default function LoginPage() {
 
     try {
       if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, email, password);
+        // 新規登録
+        await registerWithEmail(email, password, displayName || undefined);
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        // ログイン
+        await loginWithEmail(email, password);
       }
       router.push("/"); // ログイン成功したらホームページへ
     } catch (err: any) {
       console.error("認証エラー:", err);
-      switch (err.code) {
-        case "auth/invalid-email":
-          setError("無効なメールアドレスです");
-          break;
-        case "auth/user-disabled":
-          setError("このアカウントは無効です");
-          break;
-        case "auth/user-not-found":
-          setError("ユーザーが見つかりません");
-          break;
-        case "auth/wrong-password":
-          setError("パスワードが間違っています");
-          break;
-        case "auth/weak-password":
-          setError("パスワードは6文字以上必要です");
-          break;
-        case "auth/email-already-in-use":
-          setError("このメールアドレスは既に使用されています");
-          break;
-        default:
-          setError("認証に失敗しました");
-      }
+      handleAuthError(err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // エラーハンドリング
+  const handleAuthError = (error: any) => {
+    switch (error.code) {
+      case "auth/invalid-email":
+        setError("無効なメールアドレスです");
+        break;
+      case "auth/user-disabled":
+        setError("このアカウントは無効です");
+        break;
+      case "auth/user-not-found":
+        setError("ユーザーが見つかりません");
+        break;
+      case "auth/wrong-password":
+        setError("パスワードが間違っています");
+        break;
+      case "auth/weak-password":
+        setError("パスワードは6文字以上必要です");
+        break;
+      case "auth/email-already-in-use":
+        setError("このメールアドレスは既に使用されています");
+        break;
+      default:
+        setError("認証に失敗しました");
     }
   };
 
@@ -100,9 +107,30 @@ export default function LoginPage() {
         )}
         
         <form onSubmit={handleEmailAuth} className="space-y-4 mb-6">
+          {/* 表示名入力（新規登録時のみ） */}
+          {isSignUp && (
+            <div>
+              <label htmlFor="displayName" className="block text-sm font-medium mb-1">
+                表示名
+              </label>
+              <div className="relative">
+                <FiUserPlus className="absolute left-3 top-3 text-slate-400" />
+                <input
+                  id="displayName"
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg py-2 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="あなたの表示名"
+                />
+              </div>
+            </div>
+          )}
+          
+          {/* メールアドレス */}
           <div>
             <label htmlFor="email" className="block text-sm font-medium mb-1">
-              メールアドレス
+              メールアドレス *
             </label>
             <div className="relative">
               <FiMail className="absolute left-3 top-3 text-slate-400" />
@@ -118,9 +146,10 @@ export default function LoginPage() {
             </div>
           </div>
           
+          {/* パスワード */}
           <div>
             <label htmlFor="password" className="block text-sm font-medium mb-1">
-              パスワード
+              パスワード *
             </label>
             <div className="relative">
               <FiLock className="absolute left-3 top-3 text-slate-400" />

@@ -1,15 +1,7 @@
 "use client";
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { 
-  GoogleAuthProvider, 
-  onAuthStateChanged, 
-  signInWithPopup, 
-  signOut as firebaseSignOut,
-  User 
-} from 'firebase/auth';
-import { auth } from '../firebase/config';
-import { createOrUpdateUserProfile } from '../firebase/user';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth, loginWithGoogle, logout as firebaseLogout } from '../firebase/auth';
 
 interface AuthContextType {
   user: User | null;
@@ -25,18 +17,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      
-      // ユーザーがログインしている場合はプロフィールを作成/更新
-      if (currentUser) {
-        try {
-          await createOrUpdateUserProfile(currentUser);
-        } catch (error) {
-          console.error("ユーザープロフィール更新エラー:", error);
-        }
-      }
-      
       setLoading(false);
     });
 
@@ -45,8 +27,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signInWithGoogle = async () => {
     try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      await loginWithGoogle();
     } catch (error) {
       console.error('Googleログインエラー:', error);
       throw error;
@@ -55,7 +36,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
-      await firebaseSignOut(auth);
+      await firebaseLogout();
     } catch (error) {
       console.error('ログアウトエラー:', error);
       throw error;
