@@ -2,7 +2,8 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { FiSearch, FiBookmark, FiThumbsUp, FiCheckCircle } from "react-icons/fi";
+import { FiSearch, FiBookmark, FiThumbsUp, FiCheckCircle, FiEdit } from "react-icons/fi";
+import { useAuth } from "../../context/AuthContext";
 
 // 仮のWiki記事データ（後でFirestoreから取得するように変更）
 const wikiArticles = [
@@ -95,6 +96,7 @@ export default function WikiPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<"usefulCount" | "likeCount" | "date">("usefulCount");
+  const { user } = useAuth();
   
   // 検索とフィルター処理
   const filteredArticles = wikiArticles
@@ -140,10 +142,22 @@ export default function WikiPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2, duration: 0.5 }}
-            className="text-xl text-center text-slate-300 max-w-2xl"
+            className="text-xl text-center text-slate-300 max-w-2xl mb-6"
           >
             専門家の知識を集約し、様々な制限環境における解決策を提供します
           </motion.p>
+          
+          {user && (
+            <Link href="/wiki/create">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="flex items-center bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-2 rounded-full font-medium shadow-lg"
+              >
+                <FiEdit className="mr-2" /> 新しい記事を作成
+              </motion.button>
+            </Link>
+          )}
         </div>
         
         <motion.div 
