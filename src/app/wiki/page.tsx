@@ -4,118 +4,63 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { FiSearch, FiBookmark, FiThumbsUp, FiCheckCircle, FiEdit } from "react-icons/fi";
 import { useAuth } from "../../context/AuthContext";
-
-// 仮のWiki記事データ（後でFirestoreから取得するように変更）
-const wikiArticles = [
-  {
-    id: "no-cookie-youtube",
-    title: "No-cookie Youtubeの使い方",
-    description: "ISGCが制限するYoutubeを回避するためのno-cookie方式の解説",
-    author: "ProxyMaster",
-    date: "2023-05-15",
-    usefulCount: 342,
-    likeCount: 120,
-    tags: ["youtube", "proxy", "isgc", "no-cookie"]
-  },
-  {
-    id: "youtube-proxys",
-    title: "Youtube用プロキシ一覧",
-    description: "Youtubeを視聴するための最新プロキシサイト一覧と詳細な使用方法",
-    author: "NetFreedom",
-    date: "2023-04-22",
-    usefulCount: 289,
-    likeCount: 95,
-    tags: ["youtube", "proxy", "video", "streaming"]
-  },
-  {
-    id: "proxys-isgc",
-    title: "ISGC/InterSafe向けプロキシ",
-    description: "ISGC/InterSafeに対応したプロキシサーバーの紹介と詳細な使用方法",
-    author: "SecurityBypass",
-    date: "2023-03-10",
-    usefulCount: 256,
-    likeCount: 88,
-    tags: ["isgc", "intersafe", "proxy", "school"]
-  },
-  {
-    id: "general-proxys",
-    title: "一般的なプロキシサーバー一覧",
-    description: "様々な制限を回避するための汎用プロキシサーバー一覧と使い方ガイド",
-    author: "FreedomTech",
-    date: "2023-06-05",
-    usefulCount: 201,
-    likeCount: 76,
-    tags: ["proxy", "vpn", "bypass", "general"]
-  },
-  {
-    id: "school-wifi-bypass",
-    title: "学校Wi-Fi制限の回避方法",
-    description: "学校のWi-Fiネットワークの制限を回避するテクニック集と応用方法",
-    author: "SchoolHacker",
-    date: "2023-02-18",
-    usefulCount: 187,
-    likeCount: 65,
-    tags: ["school", "wifi", "network", "bypass"]
-  },
-  {
-    id: "school-device-unlock",
-    title: "学校端末の制限解除方法",
-    description: "学校から配布された端末の制限を安全に解除する方法とリスク対策",
-    author: "DeviceLiberty",
-    date: "2023-07-12",
-    usefulCount: 175,
-    likeCount: 61,
-    tags: ["school", "device", "chromebook", "ipad", "mdm"]
-  },
-  {
-    id: "parental-control-bypass",
-    title: "ペアレンタルコントロールの回避方法",
-    description: "家庭内のペアレンタルコントロール設定を回避するテクニックと注意点",
-    author: "PrivacyDefender",
-    date: "2023-01-30",
-    usefulCount: 168,
-    likeCount: 59,
-    tags: ["parental", "control", "home", "router"]
-  },
-  {
-    id: "home-wifi-bypass",
-    title: "家庭内Wi-Fi制限の回避方法",
-    description: "家庭のWi-Fiルーターに設定された制限を回避する方法とその影響",
-    author: "HomeNetExpert",
-    date: "2023-08-05",
-    usefulCount: 156,
-    likeCount: 52,
-    tags: ["home", "wifi", "router", "bypass"]
-  }
-];
-
-// 全てのタグを抽出
-const allTags = Array.from(new Set(wikiArticles.flatMap(article => article.tags)));
+import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { db } from "../../firebase/config";
+import { getAllArticles, WikiArticle } from "../../firebase/wiki";
 
 export default function WikiPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<"usefulCount" | "likeCount" | "date">("usefulCount");
   const { user } = useAuth();
+  const [wikiArticles, setWikiArticles] = useState<WikiArticle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [allTags, setAllTags] = useState<string[]>([]);
+  
+  // Firestoreからデータを取得
+  useEffect(() => {
+    const fetchArticles = async () => {
+      try {
+        // Firestoreから記事データを取得
+        const articles = await getAllArticles(sortBy);
+        setWikiArticles(articles);
+        
+        // 全てのタグを抽出して一意の配列にする
+        setAllTags(Array.from(new Set(articles.flatMap(article => article.tags || []))));
+      } catch (error) {
+        console.error("記事の取得エラー:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchArticles();
+  }, [sortBy]); // sortByが変更されたときに再取得
   
   // 検索とフィルター処理
   const filteredArticles = wikiArticles
     .filter(article => {
       // 検索クエリに一致
-      const matchesSearch = article.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                           article.description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = 
+        article.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        (article.description?.toLowerCase().includes(searchQuery.toLowerCase()) || false);
       
       // 選択されたタグに一致
       const matchesTags = selectedTags.length === 0 || 
-                         selectedTags.every(tag => article.tags.includes(tag));
+                         (article.tags && selectedTags.every(tag => article.tags.includes(tag)));
       
       return matchesSearch && matchesTags;
     })
     .sort((a, b) => {
       if (sortBy === "date") {
-        return new Date(b.date).getTime() - new Date(a.date).getTime();
+        // 日付型とタイムスタンプの両方に対応
+        const dateA = typeof a.date === 'string' ? new Date(a.date) : a.date?.toDate();
+        const dateB = typeof b.date === 'string' ? new Date(b.date) : b.date?.toDate();
+        
+        if (!dateA || !dateB) return 0;
+        return dateB.getTime() - dateA.getTime();
       }
-      return b[sortBy] - a[sortBy];
+      return (b[sortBy] || 0) - (a[sortBy] || 0);
     });
   
   const toggleTag = (tag: string) => {
@@ -125,6 +70,21 @@ export default function WikiPage() {
       setSelectedTags([...selectedTags, tag]);
     }
   };
+  
+  // ソート方法変更時の処理
+  const handleSortChange = (newSortBy: "usefulCount" | "likeCount" | "date") => {
+    setSortBy(newSortBy);
+    // サーバーから再取得する場合はコメント解除
+    // setLoading(true);
+  };
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white flex justify-center items-center">
+        <div className="text-xl">読み込み中...</div>
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white">
@@ -181,7 +141,7 @@ export default function WikiPage() {
             <div className="flex gap-2">
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as "usefulCount" | "likeCount" | "date")}
+                onChange={(e) => handleSortChange(e.target.value as "usefulCount" | "likeCount" | "date")}
                 className="bg-white/10 border border-white/20 rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
                 <option value="usefulCount">使えた！順</option>
@@ -235,19 +195,25 @@ export default function WikiPage() {
                     <h2 className="text-xl font-semibold mb-2">{article.title}</h2>
                     <p className="text-slate-300 text-sm mb-4 line-clamp-2">{article.description}</p>
                     
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {article.tags.map(tag => (
-                        <span key={tag} className="text-xs bg-white/10 rounded-full px-2 py-1">
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
+                    {article.tags && article.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {article.tags.map(tag => (
+                          <span key={tag} className="text-xs bg-white/10 rounded-full px-2 py-1">
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     
                     <div className="flex justify-between items-center text-sm text-slate-300">
                       <span className="flex items-center">
                         <FiBookmark className="mr-1" /> {article.author}
                       </span>
-                      <span className="text-xs">{article.date}</span>
+                      <span className="text-xs">
+                        {typeof article.date === 'string' 
+                          ? article.date 
+                          : article.date?.toDate().toLocaleDateString('ja-JP') || '日付なし'}
+                      </span>
                     </div>
                     
                     <div className="flex justify-between mt-4 text-sm">

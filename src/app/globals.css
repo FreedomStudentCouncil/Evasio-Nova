@@ -84,15 +84,24 @@ body {
 
 /* 画像アップロードスタイル */
 .dropzone {
-  @apply border-2 border-dashed border-white/30 rounded-lg p-6 
-         flex flex-col items-center justify-center cursor-pointer
-         transition-colors;
+  border: 2px dashed rgba(255, 255, 255, 0.3);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition-property: color, background-color, border-color;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
 }
 
 .dropzone.active {
-  @apply border-blue-500 bg-blue-500/10;
+  border-color: rgb(59, 130, 246);
+  background-color: rgba(59, 130, 246, 0.1);
 }
 
 .dropzone:hover {
-  @apply border-white/50;
+  border-color: rgba(255, 255, 255, 0.5);
 }

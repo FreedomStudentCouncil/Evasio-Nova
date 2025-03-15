@@ -1,19 +1,22 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { FiSave, FiX, FiImage, FiArrowLeft, FiTag } from "react-icons/fi";
+import { FiSave, FiX, FiImage, FiArrowLeft, FiTag, FiAlertCircle } from "react-icons/fi";
 import Link from "next/link";
-import { useAuth } from "../../../context/AuthContext";
-import ImageUploader from "../../../components/ImageUploader";
-import { createArticle } from "../../../firebase/wiki";
+import { useAuth } from "../../../../context/AuthContext";
+import ImageUploader from "../../../../components/ImageUploader";
+import { getArticleById, updateArticle, WikiArticle } from "../../../../firebase/wiki";
 
-export default function CreateWikiPage() {
+export default function EditWikiPage() {
   const router = useRouter();
+  const params = useParams();
+  const articleId = params.id as string;
   const { user } = useAuth();
   
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [description, setDescription] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -21,6 +24,44 @@ export default function CreateWikiPage() {
   const [showImageUploader, setShowImageUploader] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+
+  // 記事データの取得
+  useEffect(() => {
+    const fetchArticleData = async () => {
+      if (!articleId || !user) return;
+      
+      try {
+        const article = await getArticleById(articleId);
+        if (!article) {
+          setNotFound(true);
+          return;
+        }
+        
+        // 記事が存在する場合、フォームにデータを設定
+        setTitle(article.title);
+        setContent(article.content);
+        setDescription(article.description || "");
+        setTags(article.tags || []);
+        if (article.imageUrl) setImageUrl(article.imageUrl);
+        if (article.imageId) setImageId(article.imageId);
+        
+        // 自分の記事かどうかをチェック
+        const isMyArticle = article.authorId === user.uid;
+        setIsOwner(isMyArticle);
+        
+      } catch (error) {
+        console.error("記事の取得に失敗しました:", error);
+        setError("記事の取得に失敗しました");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchArticleData();
+  }, [articleId, user]);
 
   // 認証チェック
   if (!user) {
@@ -32,7 +73,7 @@ export default function CreateWikiPage() {
           className="bg-white/10 backdrop-blur-md rounded-xl border border-white/20 p-8 max-w-md w-full text-center"
         >
           <h2 className="text-2xl font-bold mb-4">ログインが必要です</h2>
-          <p className="text-slate-300 mb-6">Wiki記事を作成するにはログインしてください。</p>
+          <p className="text-slate-300 mb-6">Wiki記事を編集するにはログインしてください。</p>
           
           <Link href="/login">
             <motion.button
@@ -41,6 +82,56 @@ export default function CreateWikiPage() {
               className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg font-bold"
             >
               ログインページへ
+            </motion.button>
+          </Link>
+        </motion.div>
+      </div>
+    );
+  }
+  
+  // 読み込み中
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white flex justify-center items-center">
+        <div className="text-xl">読み込み中...</div>
+      </div>
+    );
+  }
+  
+  // 記事が見つからない
+  if (notFound) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white flex flex-col justify-center items-center">
+        <div className="text-2xl mb-4">記事が見つかりません</div>
+        <Link href="/wiki">
+          <button className="px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors">
+            Wikiに戻る
+          </button>
+        </Link>
+      </div>
+    );
+  }
+  
+  // 自分の記事でない場合
+  if (!isOwner) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white flex flex-col justify-center items-center p-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white/10 backdrop-blur-md rounded-xl border border-white/20 p-8 max-w-md w-full text-center"
+        >
+          <FiAlertCircle className="text-5xl text-red-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-4">編集権限がありません</h2>
+          <p className="text-slate-300 mb-6">この記事はあなたが作成したものではないため、編集できません。</p>
+          
+          <Link href={`/wiki/${articleId}`}>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg font-bold"
+            >
+              記事に戻る
             </motion.button>
           </Link>
         </motion.div>
@@ -99,29 +190,24 @@ export default function CreateWikiPage() {
     setError("");
     
     try {
-      // 記事データの構造
-      const articleData = {
+      // 編集内容を更新
+      const articleData: Partial<WikiArticle> = {
         title,
         content,
-        description: content.substring(0, 150) + (content.length > 150 ? '...' : ''),
+        description: description || content.substring(0, 150) + (content.length > 150 ? '...' : ''),
         tags,
-        author: user.displayName || "匿名ユーザー",
-        authorId: user.uid,
         imageUrl,
         imageId,
-        date: new Date().toISOString(),
-        usefulCount: 0,
-        likeCount: 0
       };
       
       // Firestoreに保存
-      const articleId = await createArticle(articleData);
+      await updateArticle(articleId, articleData);
       
       // 成功したら記事表示ページへリダイレクト
       router.push(`/wiki/${articleId}`);
     } catch (error) {
-      console.error("記事の投稿エラー:", error);
-      setError("記事の投稿に失敗しました。もう一度お試しください。");
+      console.error("記事の更新エラー:", error);
+      setError("記事の更新に失敗しました。もう一度お試しください。");
     } finally {
       setIsSubmitting(false);
     }
@@ -131,13 +217,13 @@ export default function CreateWikiPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white">
       <div className="container mx-auto px-4 py-12">
         <div className="max-w-4xl mx-auto">
-          <Link href="/wiki">
+          <Link href={`/wiki/${articleId}`}>
             <motion.button
               whileHover={{ x: -5 }}
               whileTap={{ scale: 0.95 }}
               className="flex items-center text-blue-400 hover:text-blue-300 transition-colors mb-8"
             >
-              <FiArrowLeft className="mr-2" /> Wiki一覧に戻る
+              <FiArrowLeft className="mr-2" /> 記事に戻る
             </motion.button>
           </Link>
 
@@ -148,8 +234,8 @@ export default function CreateWikiPage() {
             className="bg-white/10 backdrop-blur-md rounded-xl border border-white/20 overflow-hidden"
           >
             <div className="p-6 sm:p-8 border-b border-white/10">
-              <h1 className="text-2xl sm:text-3xl font-bold mb-2">新しい記事を作成</h1>
-              <p className="text-slate-300">あなたの知識を共有して、みんなを助けましょう</p>
+              <h1 className="text-2xl sm:text-3xl font-bold mb-2">記事を編集</h1>
+              <p className="text-slate-300">最新の情報に更新して、より役立つコンテンツにしましょう</p>
             </div>
             
             <form onSubmit={handleSubmit} className="p-6 sm:p-8">
@@ -167,6 +253,24 @@ export default function CreateWikiPage() {
                   className="w-full bg-white/10 border border-white/20 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   required
                 />
+              </div>
+              
+              {/* 概要 */}
+              <div className="mb-6">
+                <label htmlFor="description" className="block text-sm font-medium mb-2">
+                  概要（任意）
+                </label>
+                <input
+                  id="description"
+                  type="text"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="記事の簡単な説明..."
+                  className="w-full bg-white/10 border border-white/20 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  入力しない場合は本文の先頭から自動生成されます
+                </p>
               </div>
               
               {/* タグ */}
@@ -223,7 +327,7 @@ export default function CreateWikiPage() {
                 </p>
               </div>
               
-              {/* 画像アップロード */}
+              {/* 画像アップロード/編集 */}
               <div className="mb-6">
                 <label className="block text-sm font-medium mb-2">
                   画像（任意）
@@ -314,10 +418,10 @@ export default function CreateWikiPage() {
                   className={`flex-1 py-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center
                     ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
                 >
-                  <FiSave className="mr-2" /> {isSubmitting ? '投稿中...' : '記事を投稿する'}
+                  <FiSave className="mr-2" /> {isSubmitting ? '更新中...' : '変更を保存'}
                 </motion.button>
                 
-                <Link href="/wiki" className="flex-1">
+                <Link href={`/wiki/${articleId}`} className="flex-1">
                   <motion.button
                     type="button"
                     whileHover={{ y: -2 }}

@@ -1,16 +1,40 @@
 /** @type {import('next').NextConfig} */
+
+// 環境変数から本番ビルドモードかどうかを判断
+// NEXT_PUBLIC_BUILD_MODE=production の場合、静的エクスポート用の設定が有効になる
+const isProductionBuild = process.env.NEXT_PUBLIC_BUILD_MODE === 'production';
+
 const nextConfig = {
-  // 静的サイト生成のための設定
-  output: 'export',
+  // 本番ビルドモード時のみ静的エクスポートを有効化
+  ...(isProductionBuild && { output: 'export' }),
   
-  // JSON モジュールのサポートを明示的に有効化
+  // 静的ページ生成のタイムアウト設定
+  staticPageGenerationTimeout: 180,
+  
+  // JSONモジュールサポートを有効化
   experimental: {
     serverComponentsExternalPackages: [],
+    turbo: {
+      rules: {
+        // ビルドパフォーマンス向上のためのルール
+      }
+    }
   },
   
-  // 静的ファイルやJSONファイルの処理設定
+  // 画像設定
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'i.imgur.com',
+      },
+    ],
+    // 静的エクスポート時には画像の最適化を無効化
+    ...(isProductionBuild && { unoptimized: true }),
+  },
+  
+  // JSONファイルをモジュールとして扱うための設定
   webpack: (config) => {
-    // JSONファイルをモジュールとして扱うための設定
     config.module.rules.push({
       test: /\.json$/,
       type: 'json',
@@ -18,16 +42,8 @@ const nextConfig = {
     
     return config;
   },
-  
-  // パス解決の設定
-  async rewrites() {
-    return [];
-  },
-  
-  // 画像の最適化を無効化（静的エクスポート時に必要）
-  images: {
-    unoptimized: true,
-  },
 };
+
+console.log(`Building in ${isProductionBuild ? 'PRODUCTION' : 'DEVELOPMENT'} mode`);
 
 module.exports = nextConfig;

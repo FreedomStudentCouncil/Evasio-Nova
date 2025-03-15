@@ -9,6 +9,7 @@ import {
   User 
 } from 'firebase/auth';
 import { auth } from '../firebase/config';
+import { createOrUpdateUserProfile } from '../firebase/user';
 
 interface AuthContextType {
   user: User | null;
@@ -24,8 +25,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      
+      // ユーザーがログインしている場合はプロフィールを作成/更新
+      if (currentUser) {
+        try {
+          await createOrUpdateUserProfile(currentUser);
+        } catch (error) {
+          console.error("ユーザープロフィール更新エラー:", error);
+        }
+      }
+      
       setLoading(false);
     });
 
@@ -38,6 +49,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       await signInWithPopup(auth, provider);
     } catch (error) {
       console.error('Googleログインエラー:', error);
+      throw error;
     }
   };
 
@@ -46,6 +58,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       await firebaseSignOut(auth);
     } catch (error) {
       console.error('ログアウトエラー:', error);
+      throw error;
     }
   };
 

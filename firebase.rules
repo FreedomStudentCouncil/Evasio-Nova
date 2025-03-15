@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 共通のヘルパー関数
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Wiki記事のルール
+    match /wikiArticles/{articleId} {
+      // すべてのユーザーが記事を閲覧可能
+      allow read: if true;
+      
+      // 認証済みユーザーのみ記事を作成可能
+      allow create: if isAuthenticated();
+      
+      // 記事の作成者のみが編集・削除可能
+      allow update, delete: if isAuthenticated() && isOwner(resource.data.authorId);
+    }
+    
+    // ユーザープロファイルのルール
+    match /users/{userId} {
+      // 自分のデータのみ読み取り・書き込み可能
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // コメントのルール
+    match /comments/{commentId} {
+      // すべてのユーザーがコメントを閲覧可能
+      allow read: if true;
+      
+      // 認証済みユーザーのみコメントを作成可能
+      allow create: if isAuthenticated();
+      
+      // 自分のコメントのみ編集・削除可能
+      allow update, delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+    
+    // 評価（使えた！・いいね）のルール
+    match /ratings/{ratingId} {
+      // すべてのユーザーが評価の総数を閲覧可能
+      allow read: if true;
+      
+      // 認証済みユーザーのみ評価可能
+      allow create: if isAuthenticated();
+      
+      // 自分の評価のみ変更・削除可能
+      allow update, delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+  }
+}

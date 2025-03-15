@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '../context/AuthContext';
+import Navbar from '../components/Navbar';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -19,7 +20,10 @@ export default function RootLayout({
     <html lang="ja">
       <body className={inter.className}>
         <AuthProvider>
-          {children}
+          <Navbar />
+          <div className="pt-14">{/* Navbarの高さ分のパディング */}
+            {children}
+          </div>
         </AuthProvider>
       </body>
     </html>
