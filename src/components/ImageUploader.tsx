@@ -2,6 +2,7 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { FiUpload, FiX, FiCheck, FiLoader } from 'react-icons/fi';
+import Image from 'next/image';
 import { useImgur } from '../hooks/useImgur';
 
 interface ImageUploaderProps {
@@ -105,23 +106,29 @@ export default function ImageUploader({ onUploadComplete, className = '' }: Imag
       ) : (
         <div className="relative">
           <div className="relative overflow-hidden rounded-lg">
-            <img
-              src={previewUrl}
-              alt="Preview"
-              className="w-full h-auto rounded-lg"
-            />
-            <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
-              {isUploading ? (
-                <FiLoader className="text-3xl animate-spin text-white" />
-              ) : error ? (
-                <div className="text-center p-4">
-                  <FiX className="text-3xl text-red-500 mx-auto mb-2" />
-                  <p className="text-sm text-red-300">アップロードエラー</p>
+            {previewUrl && (
+              <div className="relative w-full h-64">
+                <Image
+                  src={previewUrl}
+                  alt="Preview"
+                  fill
+                  style={{objectFit: "contain"}}
+                  className="rounded-lg"
+                />
+                <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+                  {isUploading ? (
+                    <FiLoader className="text-3xl animate-spin text-white" />
+                  ) : error ? (
+                    <div className="text-center p-4">
+                      <FiX className="text-3xl text-red-500 mx-auto mb-2" />
+                      <p className="text-sm text-red-300">アップロードエラー</p>
+                    </div>
+                  ) : imageData ? (
+                    <FiCheck className="text-3xl text-green-500" />
+                  ) : null}
                 </div>
-              ) : imageData ? (
-                <FiCheck className="text-3xl text-green-500" />
-              ) : null}
-            </div>
+              </div>
+            )}
           </div>
           
           <motion.button

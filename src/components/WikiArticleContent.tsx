@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { FiThumbsUp, FiCheckCircle, FiBookmark, FiCalendar, FiMessageCircle, FiEdit } from "react-icons/fi";
 import ReactMarkdown from 'react-markdown';
 import Link from "next/link";
+import Image from "next/image";
 import { db } from "../firebase/config";
 import { doc, getDoc } from "firebase/firestore";
 import { incrementLikeCount, incrementUsefulCount, WikiArticle } from "../firebase/wiki";
@@ -173,11 +174,13 @@ export default function WikiArticleContent({
       <div className="p-6 sm:p-8">
         {/* 記事に画像があれば表示 */}
         {article.imageUrl && (
-          <div className="mb-6">
-            <img
+          <div className="mb-6 relative w-full h-64">
+            <Image
               src={article.imageUrl}
               alt={article.title}
-              className="w-full rounded-lg"
+              fill
+              style={{objectFit: "cover"}}
+              className="rounded-lg"
             />
           </div>
         )}

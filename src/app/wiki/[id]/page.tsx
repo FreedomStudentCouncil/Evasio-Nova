@@ -1,28 +1,12 @@
 import { Suspense } from "react";
-import { notFound } from "next/navigation";
 import Link from "next/link";
 import { FiArrowLeft } from "react-icons/fi";
 import WikiArticleContent from "../../../components/WikiArticleContent";
-import { db } from "../../../firebase/config";
-import { collection, getDocs } from "firebase/firestore";
+import { generateStaticWikiParams } from "../staticParams";
 
 // 静的ページを生成するための情報を提供する関数
 export async function generateStaticParams() {
-  try {
-    // 静的に生成するページのIDパラメータを返す
-    // 本番環境ではFirestoreからすべての記事IDを取得
-    if (process.env.NODE_ENV === 'production') {
-      const articlesRef = collection(db, "wikiArticles");
-      const querySnapshot = await getDocs(articlesRef);
-      return querySnapshot.docs.map(doc => ({ id: doc.id }));
-    }
-    
-    // 開発環境では空の配列を返す（サーバーサイドでの静的生成をスキップ）
-    return [];
-  } catch (error) {
-    console.error("Generate static params error:", error);
-    return [];
-  }
+  return generateStaticWikiParams();
 }
 
 // サーバーコンポーネントのページ

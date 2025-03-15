@@ -2,10 +2,8 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { FiSearch, FiBookmark, FiThumbsUp, FiCheckCircle, FiEdit } from "react-icons/fi";
+import { FiSearch, FiThumbsUp, FiCheckCircle, FiEdit, FiUser } from "react-icons/fi"; // FiBookmarkをFiUserに置き換え
 import { useAuth } from "../../context/AuthContext";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
-import { db } from "../../firebase/config";
 import { getAllArticles, WikiArticle } from "../../firebase/wiki";
 
 export default function WikiPage() {
@@ -207,7 +205,7 @@ export default function WikiPage() {
                     
                     <div className="flex justify-between items-center text-sm text-slate-300">
                       <span className="flex items-center">
-                        <FiBookmark className="mr-1" /> {article.author}
+                        <FiUser className="mr-1" /> {article.author} {/* FiBookmarkをFiUserに変更 */}
                       </span>
                       <span className="text-xs">
                         {typeof article.date === 'string' 

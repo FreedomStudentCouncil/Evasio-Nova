@@ -12,11 +12,11 @@ firebase login
 
 # 承認ドメインを追加
 echo "承認ドメインを追加しています..."
-firebase auth:domain:add evodsia-nova.onrender.com
+firebase auth:domain:add evasio-nova.onrender.com
 firebase auth:domain:add localhost
 
 echo "セットアップ完了！"
 echo "注意: Firebase Consoleでも以下を確認してください:"
 echo "https://console.firebase.google.com/project/YOUR_PROJECT_ID/authentication/settings"
-echo "- Authorized domainsに 'evodsia-nova.onrender.com' と 'localhost' が含まれていること"
-echo "- 'OAuth redirect domains' に 'evodsia-nova.onrender.com' が含まれていること"
+echo "- Authorized domainsに 'evasio-nova.onrender.com' と 'localhost' が含まれていること"
+echo "- 'OAuth redirect domains' に 'evasio-nova.onrender.com' が含まれていること"

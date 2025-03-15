@@ -11,10 +11,7 @@ import {
   orderBy, 
   Timestamp,
   serverTimestamp,
-  increment,
-  FirestoreDataConverter,
-  QueryDocumentSnapshot,
-  SnapshotOptions
+  increment
 } from 'firebase/firestore';
 import { db } from './config';
 

@@ -3,7 +3,7 @@ import { uploadImage, ImgurResponse } from '../imgur/api';
 
 interface UseImgurOptions {
   onSuccess?: (response: ImgurResponse) => void;
-  onError?: (error: any) => void;
+  onError?: (error: Error) => void;
 }
 
 export function useImgur(options?: UseImgurOptions) {

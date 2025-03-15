@@ -1,5 +1,5 @@
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { auth, db } from './config';
+import { db } from './config';
 import { User } from 'firebase/auth';
 
 export interface UserProfile {

@@ -7,7 +7,6 @@ import {
   signOut,
   updateProfile,
   sendPasswordResetEmail,
-  User,
   UserCredential
 } from 'firebase/auth';
 import { createOrUpdateUserProfile } from './user';
@@ -80,7 +79,7 @@ export async function loginWithGoogle(): Promise<UserCredential> {
       // アカウント選択を常に表示
       prompt: 'select_account',
       // 承認済みドメイン設定
-      hosted_domain: 'evodsia-nova.onrender.com'
+      hosted_domain: 'evasio-nova.onrender.com'
     });
     
     // 本番環境ではリダイレクトを使用（ポップアップはブロックされることがある）
@@ -102,16 +101,16 @@ export async function loginWithGoogle(): Promise<UserCredential> {
       
       return userCredential;
     }
-  } catch (error: any) {
+  } catch (error: unknown) {  // ここを unknown に変更
     console.error('Googleログインエラー:', error);
     
     // エラー内容の詳細をログに出力
-    if (error.code === 'auth/unauthorized-domain') {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'auth/unauthorized-domain') {
       console.error('未承認ドメインエラー: Firebase Consoleで現在のドメインを承認してください。');
       console.error('承認が必要なドメイン:', window.location.origin);
       console.error('対応方法: Firebase Console > Authentication > Settings > Authorized domains に以下を追加:');
       console.error('- localhost');
-      console.error('- evodsia-nova.onrender.com');
+      console.error('- evasio-nova.onrender.com');
     }
     
     throw error;

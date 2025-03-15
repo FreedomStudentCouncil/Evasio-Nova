@@ -42,8 +42,9 @@ export default function LoginPage() {
   };
 
   // エラーハンドリング
-  const handleAuthError = (error: any) => {
-    switch (error.code) {
+  const handleAuthError = (error: Error & { code?: string }) => {
+    const errorCode = error.code || '';
+    switch (errorCode) {
       case "auth/invalid-email":
         setError("無効なメールアドレスです");
         break;
