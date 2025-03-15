@@ -1,0 +1,216 @@
+{
+  "questions": [
+    {
+      "id": "start",
+      "text": "何がしたいですか？",
+      "choices": [
+        {
+          "text": "プロキシを探す",
+          "nextQuestionId": "proxy"
+        },
+        {
+          "text": "学校の制限を解除する",
+          "nextQuestionId": "school"
+        },
+        {
+          "text": "家の制限を解除する",
+          "nextQuestionId": "home"
+        },
+        {
+          "text": "その他",
+          "nextQuestionId": "other"
+        }
+      ]
+    },
+    {
+      "id": "proxy",
+      "text": "何をするためのプロキシが必要ですか？",
+      "choices": [
+        {
+          "text": "Youtubeを見る",
+          "nextQuestionId": "youtube_proxy"
+        },
+        {
+          "text": "サイトを見る",
+          "nextQuestionId": "site_proxy"
+        }
+      ]
+    },
+    {
+      "id": "youtube_proxy",
+      "text": "どの制限ソフトが使われていますか？",
+      "choices": [
+        {
+          "text": "ISGC",
+          "nextQuestionId": "result_no_cookie_youtube"
+        },
+        {
+          "text": "InterSafe",
+          "nextQuestionId": "result_youtube_proxys"
+        },
+        {
+          "text": "拡張機能系",
+          "nextQuestionId": "result_youtube_proxys"
+        },
+        {
+          "text": "その他",
+          "nextQuestionId": "result_youtube_proxys"
+        }
+      ]
+    },
+    {
+      "id": "site_proxy",
+      "text": "どの制限ソフトが使われていますか？",
+      "choices": [
+        {
+          "text": "ISGC",
+          "nextQuestionId": "result_proxys_isgc"
+        },
+        {
+          "text": "InterSafe",
+          "nextQuestionId": "result_proxys_isgc"
+        },
+        {
+          "text": "拡張機能系",
+          "nextQuestionId": "result_general_proxys"
+        },
+        {
+          "text": "その他",
+          "nextQuestionId": "result_general_proxys"
+        }
+      ]
+    },
+    {
+      "id": "school",
+      "text": "学校の制限について、具体的に何をしたいですか？",
+      "choices": [
+        {
+          "text": "Wi-Fi制限を回避する",
+          "nextQuestionId": "result_school_wifi"
+        },
+        {
+          "text": "端末の制限を解除する",
+          "nextQuestionId": "result_school_device"
+        },
+        {
+          "text": "特定のサイトにアクセスする",
+          "nextQuestionId": "site_proxy"
+        }
+      ]
+    },
+    {
+      "id": "home",
+      "text": "家の制限について、具体的に何をしたいですか？",
+      "choices": [
+        {
+          "text": "ペアレンタルコントロールを回避する",
+          "nextQuestionId": "result_parental_control"
+        },
+        {
+          "text": "Wi-Fi制限を回避する",
+          "nextQuestionId": "result_home_wifi"
+        },
+        {
+          "text": "特定のサイトにアクセスする",
+          "nextQuestionId": "site_proxy"
+        }
+      ]
+    },
+    {
+      "id": "other",
+      "text": "その他の制限について、最も近いものは何ですか？",
+      "choices": [
+        {
+          "text": "インターネットカフェの制限",
+          "nextQuestionId": "result_internet_cafe"
+        },
+        {
+          "text": "企業/組織のネットワーク制限",
+          "nextQuestionId": "result_corporate_network"
+        },
+        {
+          "text": "国/地域による制限（検閲など）",
+          "nextQuestionId": "result_country_censorship"
+        },
+        {
+          "text": "わからない/その他",
+          "nextQuestionId": "result_general_advice"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "result_no_cookie_youtube",
+      "title": "No-cookie Youtubeの使い方",
+      "description": "ISGCが制限するYoutubeを回避するためのno-cookie方式の解説",
+      "wikiId": "no-cookie-youtube"
+    },
+    {
+      "id": "result_youtube_proxys",
+      "title": "Youtube用プロキシ一覧",
+      "description": "Youtubeを視聴するための最新プロキシサイト一覧",
+      "wikiId": "youtube-proxys"
+    },
+    {
+      "id": "result_proxys_isgc",
+      "title": "ISGC/InterSafe向けプロキシ",
+      "description": "ISGC/InterSafeに対応したプロキシサーバーの紹介と使用法",
+      "wikiId": "proxys-isgc"
+    },
+    {
+      "id": "result_general_proxys",
+      "title": "一般的なプロキシサーバー一覧",
+      "description": "様々な制限を回避するための汎用プロキシサーバー一覧",
+      "wikiId": "general-proxys"
+    },
+    {
+      "id": "result_school_wifi",
+      "title": "学校Wi-Fi制限の回避方法",
+      "description": "学校のWi-Fiネットワークの制限を回避するテクニック集",
+      "wikiId": "school-wifi-bypass"
+    },
+    {
+      "id": "result_school_device",
+      "title": "学校端末の制限解除方法",
+      "description": "学校から配布された端末の制限を安全に解除する方法",
+      "wikiId": "school-device-unlock"
+    },
+    {
+      "id": "result_parental_control",
+      "title": "ペアレンタルコントロールの回避方法",
+      "description": "家庭内のペアレンタルコントロール設定を回避するテクニック",
+      "wikiId": "parental-control-bypass"
+    },
+    {
+      "id": "result_home_wifi",
+      "title": "家庭内Wi-Fi制限の回避方法",
+      "description": "家庭のWi-Fiルーターに設定された制限を回避する方法",
+      "wikiId": "home-wifi-bypass"
+    },
+    {
+      "id": "result_internet_cafe",
+      "title": "インターネットカフェの制限回避",
+      "description": "インターネットカフェの利用制限を回避するテクニック集",
+      "wikiId": "internet-cafe-bypass"
+    },
+    {
+      "id": "result_corporate_network",
+      "title": "企業/組織ネットワーク制限の回避",
+      "description": "企業や組織のネットワークポリシーを回避する方法",
+      "wikiId": "corporate-network-bypass"
+    },
+    {
+      "id": "result_country_censorship",
+      "title": "国/地域の検閲回避方法",
+      "description": "国や地域による検閲を回避するためのツールとテクニック",
+      "wikiId": "censorship-bypass"
+    },
+    {
+      "id": "result_general_advice",
+      "title": "一般的な制限回避テクニック",
+      "description": "様々な種類のインターネット制限に対応する汎用テクニック",
+      "wikiId": "general-bypass-techniques"
+    }
+  ]
+}
