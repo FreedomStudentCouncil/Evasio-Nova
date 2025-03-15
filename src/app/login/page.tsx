@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { signInWithGoogle } = useAuth();
   const router = useRouter();
+  const [redirecting, setRedirecting] = useState(false);
 
   // 標準ログイン処理
   const handleEmailAuth = async (e: React.FormEvent) => {
@@ -70,13 +71,36 @@ export default function LoginPage() {
   const handleGoogleSignIn = async () => {
     try {
       setError("");
+      setRedirecting(true); // リダイレクト状態を設定
+
       await signInWithGoogle();
-      router.push("/"); // ログイン成功したらホームページへ
+      
+      // 開発環境では即座にホームへリダイレクト
+      // 本番環境ではGoogleへのリダイレクトが発生するため、ここには到達しない
+      if (process.env.NODE_ENV !== 'production') {
+        router.push("/");
+      }
     } catch (err) {
       console.error("Googleログインエラー:", err);
       setError("Googleログインに失敗しました");
+      setRedirecting(false); // リダイレクト状態をリセット
     }
   };
+
+  // リダイレクト中の表示
+  if (redirecting && process.env.NODE_ENV === 'production') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="mb-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+          </div>
+          <h2 className="text-xl font-semibold mb-2">Googleにリダイレクトしています...</h2>
+          <p className="text-slate-300">しばらくお待ちください</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white flex items-center justify-center p-4">

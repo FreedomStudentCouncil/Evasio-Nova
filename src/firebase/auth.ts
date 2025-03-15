@@ -77,32 +77,64 @@ export async function loginWithGoogle(): Promise<UserCredential> {
     
     // カスタムパラメータの設定
     provider.setCustomParameters({
-      // ログインを強制する
-      prompt: 'select_account'
+      // アカウント選択を常に表示
+      prompt: 'select_account',
+      // 承認済みドメイン設定
+      hosted_domain: 'evodsia-nova.onrender.com'
     });
     
-    // ドメインチェックを回避するため、ポップアップではなくリダイレクトを使用する場合は以下のコメントを外す
-    // import { signInWithRedirect } from 'firebase/auth';
-    // return signInWithRedirect(auth, provider);
-    
-    const userCredential = await signInWithPopup(auth, provider);
-    
-    // ユーザープロフィールをFirestoreに作成/更新
-    if (userCredential.user) {
-      await createOrUpdateUserProfile(userCredential.user);
+    // 本番環境ではリダイレクトを使用（ポップアップはブロックされることがある）
+    if (process.env.NODE_ENV === 'production') {
+      // リダイレクト認証をインポート
+      const { signInWithRedirect } = await import('firebase/auth');
+      // リダイレクト認証を開始
+      await signInWithRedirect(auth, provider);
+      // リダイレクト後に戻ってくるため、ここには到達しない
+      throw new Error('リダイレクト後のコードが実行されています');
+    } else {
+      // 開発環境ではポップアップを使用
+      const userCredential = await signInWithPopup(auth, provider);
+      
+      // ユーザープロフィールをFirestoreに作成/更新
+      if (userCredential.user) {
+        await createOrUpdateUserProfile(userCredential.user);
+      }
+      
+      return userCredential;
     }
-    
-    return userCredential;
   } catch (error: any) {
     console.error('Googleログインエラー:', error);
     
     // エラー内容の詳細をログに出力
     if (error.code === 'auth/unauthorized-domain') {
       console.error('未承認ドメインエラー: Firebase Consoleで現在のドメインを承認してください。');
-      console.error('現在のオリジン:', window.location.origin);
+      console.error('承認が必要なドメイン:', window.location.origin);
+      console.error('対応方法: Firebase Console > Authentication > Settings > Authorized domains に以下を追加:');
+      console.error('- localhost');
+      console.error('- evodsia-nova.onrender.com');
     }
     
     throw error;
+  }
+}
+
+/**
+ * リダイレクト認証の結果を処理する
+ * ページロード時に一度だけ呼び出す必要がある
+ */
+export async function getRedirectResult(): Promise<UserCredential | null> {
+  try {
+    const { getRedirectResult: getFirebaseRedirectResult } = await import('firebase/auth');
+    const result = await getFirebaseRedirectResult(auth);
+    
+    if (result && result.user) {
+      await createOrUpdateUserProfile(result.user);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('リダイレクト結果の取得エラー:', error);
+    return null;
   }
 }
 

@@ -1,7 +1,7 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, loginWithGoogle, logout as firebaseLogout } from '../firebase/auth';
+import { auth, loginWithGoogle, logout as firebaseLogout, getRedirectResult } from '../firebase/auth';
 
 interface AuthContextType {
   user: User | null;
@@ -16,13 +16,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // リダイレクト認証結果の処理とユーザー状態監視
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-    });
+    const processRedirectAndSetupAuth = async () => {
+      try {
+        // リダイレクト結果を確認（Google認証リダイレクト後）
+        await getRedirectResult();
+      } catch (error) {
+        console.error("リダイレクト認証エラー:", error);
+      }
 
-    return () => unsubscribe();
+      // 認証状態変更リスナーを設定
+      const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        setUser(currentUser);
+        setLoading(false);
+      });
+
+      return unsubscribe;
+    };
+
+    processRedirectAndSetupAuth();
   }, []);
 
   const signInWithGoogle = async () => {
