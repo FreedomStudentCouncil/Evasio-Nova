@@ -1,0 +1,1 @@
+create-next-appをしました。eslint,tailwindcss src/directory, approuter, turtopackなど、すべての選択肢はYesにし、今プロジェクトのルートに移りました。次は仕様書です。お願いします。

@@ -10,8 +10,8 @@ Evasio-Novaは、専門家が知識を投稿し、利用者がそれらの知識
 ### **2. 技術スタック**
 
 #### **フロントエンド**
-- **使用技術**: React.js, Next.js（TypeScript）
-- **デザインフレームワーク**: Tailwind CSSまたはMaterial-UI
+- **使用技術**: Next.js（TypeScript）,MPA(マルチページ)
+- **デザインフレームワーク**: Tailwind CSSとMaterial-UI
 - **主な機能**:
   - ユーザーフレンドリーなUI/UX
   - サーバーサイドレンダリングでSEO最適化
