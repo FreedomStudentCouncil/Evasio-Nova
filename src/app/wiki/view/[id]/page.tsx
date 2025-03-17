@@ -1,19 +1,24 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { FiArrowLeft } from "react-icons/fi";
-import WikiArticleContent from "../../../components/WikiArticleContent";
-import { generateStaticWikiParams } from "../staticParams";
+import WikiArticleContent from "../../../../components/WikiArticleContent";
+import { generateStaticWikiParams } from "../../staticParams";
 
 // 静的ページを生成するための情報を提供する関数
 export async function generateStaticParams() {
   return generateStaticWikiParams();
 }
 
+// 静的ページと動的ページの両方を扱う
+export const dynamicParams = true; // 静的生成されていないパラメータも許可
+
 // サーバーコンポーネントのページ（非同期関数として宣言）
 export default async function WikiArticlePage({ params }: { params: { id: string } }) {
   // paramsを確実に解決してから使用
   const resolvedParams = await Promise.resolve(params);
   const articleId = resolvedParams.id;
+  
+  console.log(`Rendering wiki article for: ${articleId}`);
 
   // ページコンポーネント自体はシンプルにして、詳細はクライアントコンポーネントに任せる
   return (

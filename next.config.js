@@ -37,6 +37,22 @@ const nextConfig = {
     },
     typescript: {
       ignoreBuildErrors: true,
+    },
+    // 404対策: カスタム404ページを実装
+    exportPathMap: async function(defaultPathMap, { dev, dir, outDir, distDir, buildId }) {
+      // デフォルトのパスに加えて、必要な静的ページを確実に生成
+      const customPaths = {
+        ...defaultPathMap,
+        // Wiki関連の共通ページ
+        '/wiki': { page: '/wiki' },
+        '/wiki/view/placeholder': { page: '/wiki/view/[id]', query: { id: 'placeholder' } },
+        '/wiki/user/placeholder': { page: '/wiki/user/[id]', query: { id: 'placeholder' } },
+        // Wikiのフォールバックページ（カスタム404の代わりに使用）
+        '/wiki/fallback': { page: '/wiki/fallback' },
+      };
+      
+      console.log('Creating static paths:', Object.keys(customPaths).length);
+      return customPaths;
     }
   }),
 };

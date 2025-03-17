@@ -184,7 +184,7 @@ export default function WikiPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 + 0.4, duration: 0.4 }}
               >
-                <Link href={`/wiki/${article.id}`}>
+                <Link href={`/wiki/view/${article.id}`}>
                   <motion.div 
                     whileHover={{ y: -5 }}
                     transition={{ duration: 0.2 }}
