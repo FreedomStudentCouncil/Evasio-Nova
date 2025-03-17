@@ -3,26 +3,8 @@
 // 環境変数から本番ビルドモードかどうかを判断
 const isProductionBuild = process.env.NEXT_PUBLIC_BUILD_MODE === 'production';
 
-const nextConfig = {
-  // 本番ビルドモード時のみ静的エクスポートを有効化
-  ...(isProductionBuild && { 
-    output: 'export',
-    trailingSlash: true
-  }),
-  
-  // 静的ページ生成のタイムアウト設定
-  staticPageGenerationTimeout: 180,
-  
-  // 実験的機能の設定
-  experimental: {
-    // ターボパックの設定
-    turbo: {
-      rules: {
-        // ビルドパフォーマンス向上のためのルール
-      }
-    }
-  },
-  
+// 開発環境でも静的エクスポートに近い動作をさせるために共通設定を定義
+const commonConfig = {
   // 画像設定
   images: {
     remotePatterns: [
@@ -31,21 +13,32 @@ const nextConfig = {
         hostname: 'i.imgur.com',
       },
     ],
-    // 静的エクスポート時には画像の最適化を無効化
-    ...(isProductionBuild && { unoptimized: true }),
   },
+  // 開発環境と本番環境の共通設定
+  staticPageGenerationTimeout: 300,
+};
+
+const nextConfig = {
+  // 共通設定を適用
+  ...commonConfig,
   
-  // ESLintの設定
-  eslint: {
-    // 本番ビルドではESLintエラーでビルドを失敗させない
-    ignoreDuringBuilds: isProductionBuild,
-  },
-  
-  // TypeScriptの型チェック
-  typescript: {
-    // 本番ビルドでは型エラーでビルドを失敗させない
-    ignoreBuildErrors: isProductionBuild,
-  },
+  // 本番ビルドモード時のみ静的エクスポートを有効化
+  ...(isProductionBuild && { 
+    output: 'export',
+    trailingSlash: true,
+    // 静的エクスポート時のみ必要な設定
+    images: {
+      ...commonConfig.images,
+      unoptimized: true,
+    },
+    // 本番ビルドでは各種エラーで失敗しないようにする
+    eslint: {
+      ignoreDuringBuilds: true,
+    },
+    typescript: {
+      ignoreBuildErrors: true,
+    }
+  }),
 };
 
 console.log(`Building in ${isProductionBuild ? 'PRODUCTION' : 'DEVELOPMENT'} mode`);

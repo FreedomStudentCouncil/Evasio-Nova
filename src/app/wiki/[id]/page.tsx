@@ -8,8 +8,7 @@ import { generateStaticWikiParams } from "../staticParams";
 export async function generateStaticParams() {
   return generateStaticWikiParams();
 }
-// /app/wiki/user/[id]/page.tsx など
-export const dynamicParams = true; // または false
+
 // サーバーコンポーネントのページ（非同期関数として宣言）
 export default async function WikiArticlePage({ params }: { params: { id: string } }) {
   // paramsを確実に解決してから使用
