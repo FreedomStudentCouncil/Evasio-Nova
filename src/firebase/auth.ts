@@ -1,5 +1,4 @@
 import { 
-  getAuth, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   signInWithPopup,
@@ -7,12 +6,15 @@ import {
   signOut,
   updateProfile,
   sendPasswordResetEmail,
-  UserCredential
+  UserCredential,
+  signInWithRedirect,
+  getRedirectResult as firebaseGetRedirectResult
 } from 'firebase/auth';
 import { createOrUpdateUserProfile } from './user';
+import { auth } from './config';
 
-// authインスタンスを取得
-const auth = getAuth();
+// Googleプロバイダーのインスタンス
+const googleProvider = new GoogleAuthProvider();
 
 /**
  * メールとパスワードでログインする
@@ -67,40 +69,19 @@ export async function registerWithEmail(
 }
 
 /**
- * Googleでログインする
+ * Googleでログインする（ポップアップ）
  * @returns ユーザー認証情報
  */
 export async function loginWithGoogle(): Promise<UserCredential> {
   try {
-    const provider = new GoogleAuthProvider();
+    const userCredential = await signInWithPopup(auth, googleProvider);
     
-    // カスタムパラメータの設定
-    provider.setCustomParameters({
-      // アカウント選択を常に表示
-      prompt: 'select_account',
-      // 承認済みドメイン設定
-      hosted_domain: 'evasio-nova.onrender.com'
-    });
-    
-    // 本番環境ではリダイレクトを使用（ポップアップはブロックされることがある）
-    if (process.env.NODE_ENV === 'production') {
-      // リダイレクト認証をインポート
-      const { signInWithRedirect } = await import('firebase/auth');
-      // リダイレクト認証を開始
-      await signInWithRedirect(auth, provider);
-      // リダイレクト後に戻ってくるため、ここには到達しない
-      throw new Error('リダイレクト後のコードが実行されています');
-    } else {
-      // 開発環境ではポップアップを使用
-      const userCredential = await signInWithPopup(auth, provider);
-      
-      // ユーザープロフィールをFirestoreに作成/更新
-      if (userCredential.user) {
-        await createOrUpdateUserProfile(userCredential.user);
-      }
-      
-      return userCredential;
+    // ユーザープロフィールをFirestoreに作成/更新
+    if (userCredential.user) {
+      await createOrUpdateUserProfile(userCredential.user);
     }
+    
+    return userCredential;
   } catch (error: unknown) {  // ここを unknown に変更
     console.error('Googleログインエラー:', error);
     
@@ -118,13 +99,24 @@ export async function loginWithGoogle(): Promise<UserCredential> {
 }
 
 /**
+ * Googleでログインする（リダイレクト）
+ */
+export async function loginWithGoogleRedirect(): Promise<void> {
+  try {
+    await signInWithRedirect(auth, googleProvider);
+  } catch (error) {
+    console.error('Googleリダイレクトログインエラー:', error);
+    throw error;
+  }
+}
+
+/**
  * リダイレクト認証の結果を処理する
  * ページロード時に一度だけ呼び出す必要がある
  */
 export async function getRedirectResult(): Promise<UserCredential | null> {
   try {
-    const { getRedirectResult: getFirebaseRedirectResult } = await import('firebase/auth');
-    const result = await getFirebaseRedirectResult(auth);
+    const result = await firebaseGetRedirectResult(auth);
     
     if (result && result.user) {
       await createOrUpdateUserProfile(result.user);

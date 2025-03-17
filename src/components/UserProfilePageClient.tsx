@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { FiArrowLeft, FiUser, FiCalendar, FiCheckCircle, FiThumbsUp } from "react-icons/fi";
+import { FiArrowLeft, FiUser, FiCalendar, FiCheckCircle, FiThumbsUp, FiAlertTriangle } from "react-icons/fi";
 import { getUserArticles, WikiArticle } from "../firebase/wiki";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase/config";
@@ -15,10 +15,12 @@ export default function UserProfilePageClient({ userId }: UserProfilePageClientP
   const [articles, setArticles] = useState<WikiArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState<string>("ユーザー");
+  const [error, setError] = useState<string | null>(null);
   
   useEffect(() => {
     const fetchUserData = async () => {
       setLoading(true);
+      setError(null);
       try {
         // ユーザー情報の取得
         const userRef = doc(db, "users", userId);
@@ -34,6 +36,11 @@ export default function UserProfilePageClient({ userId }: UserProfilePageClientP
         setArticles(userArticles);
       } catch (error) {
         console.error("ユーザーデータ取得エラー:", error);
+        if (error instanceof Error && error.toString().includes('requires an index')) {
+          setError("データベースのインデックスが必要です。管理者にお問い合わせください。");
+        } else {
+          setError("データの取得中にエラーが発生しました。");
+        }
       } finally {
         setLoading(false);
       }
@@ -85,7 +92,12 @@ export default function UserProfilePageClient({ userId }: UserProfilePageClientP
 
           <h2 className="text-xl font-semibold mb-6">投稿記事一覧</h2>
           
-          {articles.length > 0 ? (
+          {error ? (
+            <div className="bg-red-500/20 border border-red-500/30 rounded-xl p-6 text-center">
+              <FiAlertTriangle className="mx-auto text-3xl mb-3" />
+              <p>{error}</p>
+            </div>
+          ) : articles.length > 0 ? (
             <div className="grid gap-6 md:grid-cols-2">
               {articles.map((article, index) => (
                 <motion.div

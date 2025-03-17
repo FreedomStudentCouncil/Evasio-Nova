@@ -170,16 +170,36 @@ export async function deleteArticle(id: string): Promise<void> {
  */
 export async function getUserArticles(authorId: string): Promise<WikiArticle[]> {
   try {
-    const q = query(articlesRef, where('authorId', '==', authorId), orderBy('date', 'desc'));
-    const querySnapshot = await getDocs(q);
+    // インデックスが必要なクエリ
+    const q = query(
+      collection(db, 'wikiArticles'),
+      where('authorId', '==', authorId),
+      orderBy('date', 'desc')
+    );
     
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as WikiArticle[];
+    const querySnapshot = await getDocs(q);
+    const articles: WikiArticle[] = [];
+    
+    querySnapshot.forEach((doc) => {
+      articles.push({
+        id: doc.id,
+        ...doc.data()
+      } as WikiArticle);
+    });
+    
+    return articles;
   } catch (error) {
     console.error('ユーザー記事取得エラー:', error);
-    throw error;
+    
+    // 開発環境では、インデックスエラーを特定してガイダンスを表示
+    if (error instanceof Error && error.toString().includes('requires an index')) {
+      console.warn(
+        'Firestoreインデックスが必要です。以下のリンクからインデックスを作成してください:',
+        'https://console.firebase.google.com/project/evasio-nova/firestore/indexes'
+      );
+    }
+    
+    return [];
   }
 }
 

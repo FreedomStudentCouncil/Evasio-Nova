@@ -1,9 +1,10 @@
-import { initializeApp, getApps } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
+import { getAuth } from 'firebase/auth';
 
-// あなたのFirebaseプロジェクトの設定情報
-// 本番環境では環境変数から読み込むようにする
+// Firebaseの設定
+// 注: 実際の値は環境変数から取得するか、適切な値に置き換えてください
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -13,16 +14,24 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Firebaseの初期化（SSR対応）
-let app;
+// Firebase初期化
+// 既に初期化されていない場合のみ初期化を行う
+let app: FirebaseApp;
+
+// サーバーサイドレンダリング対応
 if (!getApps().length) {
   app = initializeApp(firebaseConfig);
 } else {
   app = getApps()[0];
 }
 
-// Firebase サービスのインスタンスを初期化
-const auth = getAuth(app);
+// Firestoreを初期化
 const db = getFirestore(app);
 
-export { auth, db };
+// Storageを初期化
+const storage = getStorage(app);
+
+// Authを初期化
+const auth = getAuth(app);
+
+export { app, db, storage, auth };

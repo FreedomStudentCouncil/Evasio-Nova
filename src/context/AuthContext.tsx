@@ -1,7 +1,7 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, loginWithGoogle, logout as firebaseLogout, getRedirectResult } from '../firebase/auth';
+import { auth, loginWithGoogle, logout, getRedirectResult } from '../firebase/auth';
 
 interface AuthContextType {
   user: User | null;
@@ -49,7 +49,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
-      await firebaseLogout();
+      await logout();
     } catch (error) {
       console.error('ログアウトエラー:', error);
       throw error;

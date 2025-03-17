@@ -11,7 +11,7 @@ export async function generateStaticParams() {
 }
 
 // サーバーコンポーネントとして、クライアントコンポーネントをラップする
-export default function UserProfilePage({ params }: { params: { id: string } }) {
+export default async function UserProfilePage({ params }: { params: { id: string } }) {
   const userId = params.id;
 
   return (
