@@ -9,7 +9,8 @@ export async function generateStaticParams() {
     { id: "placeholder" } // ビルド時にプレースホルダーページを1つ生成
   ];
 }
-
+// /app/wiki/user/[id]/page.tsx など
+export const dynamicParams = true; // または false
 // サーバーコンポーネントとして、クライアントコンポーネントをラップする
 export default async function UserProfilePage({ params }: { params: { id: string } }) {
   const userId = params.id;

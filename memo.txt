@@ -1,6 +1,6 @@
 create-next-appをしました。eslint,tailwindcss src/directory, approuter, turtopackなど、すべての選択肢はYesにし、今プロジェクトのルートに移りました。次は仕様書です。お願いします。
 
-
+https://console.firebase.google.com/v1/r/project/evasio-nova/firestore/indexes?create_composite=ClBwcm9qZWN0cy9ldmFzaW8tbm92YS9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvd2lraUFydGljbGVzL2luZGV4ZXMvXxABGgwKCGF1dGhvcklkEAEaCAoEZGF0ZRACGgwKCF9fbmFtZV9fEAI
 
 
  Evasio-Nova 仕様書
