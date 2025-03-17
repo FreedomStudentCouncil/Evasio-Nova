@@ -10,8 +10,9 @@ export async function generateStaticWikiParams() {
     try {
       // 本番環境では人気記事IDを取得してビルド時に生成
       const articlesRef = collection(db, "wikiArticles");
-      // 人気度順（usefulCountが多い）に上位10件を取得
-      const q = query(articlesRef, orderBy("usefulCount", "desc"), limit(10));
+      
+      // 人気度順（usefulCountが多い）に上位30件を取得 - 数を増やして主要記事をカバー
+      const q = query(articlesRef, orderBy("usefulCount", "desc"), limit(30));
       const querySnapshot = await getDocs(q);
       
       const params = querySnapshot.docs.map(doc => ({ id: doc.id }));
@@ -26,8 +27,12 @@ export async function generateStaticWikiParams() {
     }
   }
   
-  // 開発環境またはエラー時はプレースホルダーのみ返す
-  return [{ id: "placeholder" }];
+  // 開発環境またはエラー時はプレースホルダーとダミーを返す
+  return [
+    { id: "placeholder" },
+    { id: "example-article-1" },
+    { id: "example-article-2" }
+  ];
 }
 
 /**
@@ -39,8 +44,9 @@ export async function generateStaticUserParams() {
     try {
       // 本番環境では主要な投稿者のIDを取得
       const articlesRef = collection(db, "wikiArticles");
-      // 投稿記事数が多い上位のユーザーを取得するためのクエリ
-      const q = query(articlesRef, orderBy("authorId"), limit(10));
+      
+      // 投稿記事数が多い上位のユーザーを取得するためのクエリ - 数を増やして主要ユーザーをカバー
+      const q = query(articlesRef, orderBy("authorId"), limit(20));
       const querySnapshot = await getDocs(q);
       
       // ユニークなauthorIdを抽出
@@ -64,10 +70,11 @@ export async function generateStaticUserParams() {
     }
   }
   
-  // 開発環境またはエラー時はプレースホルダーのみ返す
+  // 開発環境またはエラー時はプレースホルダーとダミーを返す
   return [
     { id: "placeholder" },
-    // 動作確認用に追加のダミーIDも含める
-    { id: "example-user-id" }
+    { id: "example-user-1" },
+    { id: "example-user-2" },
+    { id: "example-user-3" }
   ];
 }

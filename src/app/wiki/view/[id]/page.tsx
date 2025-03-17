@@ -10,8 +10,8 @@ export async function generateStaticParams() {
   return generateStaticWikiParams();
 }
 
-// 静的ページと動的ページの両方を扱う
-export const dynamicParams = true; // 静的生成されていないパラメータも許可
+// 静的エクスポートでは dynamicParams: true は使用できない
+// export const dynamicParams = true; 
 
 // サーバーコンポーネントのページ（非同期関数として宣言）
 export default async function WikiArticlePage({ params }: { params: { id: string } }) {

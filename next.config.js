@@ -38,15 +38,7 @@ const nextConfig = {
     typescript: {
       ignoreBuildErrors: true,
     },
-    // exportPathMapは使用しない（Next.js 15のappディレクトリ形式ではサポートされていない）
-    // 代わりに各ページの generateStaticParams() が使用される
   }),
-
-  // generateStaticParamsが機能するための設定
-  experimental: {
-    // 確実に静的生成するためのフラグ
-    appDir: true,
-  }
 };
 
 console.log(`Building in ${isProductionBuild ? 'PRODUCTION' : 'DEVELOPMENT'} mode`);

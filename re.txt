@@ -1,1 +1,1 @@
- [31m[1m⨯[22m[39m The "exportPathMap" configuration cannot be used with the "app" directory. Please use generateStaticParams() instead.
+[?25h

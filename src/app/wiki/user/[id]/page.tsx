@@ -11,8 +11,8 @@ export async function generateStaticParams() {
   return params;
 }
 
-// 静的生成されていないパラメータも許可
-export const dynamicParams = true;
+// 静的エクスポートでは dynamicParams: true は使用できない
+// export const dynamicParams = true;
 
 // サーバーコンポーネントとして、クライアントコンポーネントをラップする
 export default async function UserProfilePage({ params }: { params: { id: string } }) {
