@@ -6,10 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "build:static": "cross-env NEXT_PUBLIC_BUILD_MODE=production next build",
+    "prepare-data": "node scripts/generate-wiki-data.js",
+    "build:full": "npm run prepare-data && npm run build:static",
     "start": "next start",
     "lint": "next lint",
     "deploy": "firebase deploy",
-    "build:deploy": "npm run build:static && npm run deploy"
+    "build:deploy": "npm run build:full && npm run deploy"
   },
   "dependencies": {
     "axios": "^1.6.0",
