@@ -9,9 +9,11 @@ export async function generateStaticParams() {
   return generateStaticWikiParams();
 }
 
-// サーバーコンポーネントのページ
-export default function WikiArticlePage({ params }: { params: { id: string } }) {
-  const articleId = params.id;
+// サーバーコンポーネントのページ（非同期関数として宣言）
+export default async function WikiArticlePage({ params }: { params: { id: string } }) {
+  // paramsを確実に解決してから使用
+  const resolvedParams = await Promise.resolve(params);
+  const articleId = resolvedParams.id;
 
   // ページコンポーネント自体はシンプルにして、詳細はクライアントコンポーネントに任せる
   return (

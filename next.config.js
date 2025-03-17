@@ -23,6 +23,9 @@ const nextConfig = {
     }
   },
   
+  // 動的パラメータの扱いを設定
+  dynamicParams: true,
+  
   // 画像設定
   images: {
     remotePatterns: [
