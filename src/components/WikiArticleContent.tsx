@@ -4,6 +4,9 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase/config";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 
 // Wikiの記事コンテンツを表示するクライアントコンポーネント
 export default function WikiArticleContent({ articleId }: { articleId: string }) {
@@ -77,7 +80,13 @@ export default function WikiArticleContent({ articleId }: { articleId: string })
         <span className="text-blue-400">最終更新: {new Date(article.updatedAt).toLocaleDateString()}</span>
       </div>
       
-      <div dangerouslySetInnerHTML={{ __html: article.content }} />
+      <ReactMarkdown 
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
+        className="markdown-body"
+      >
+        {article.content}
+      </ReactMarkdown>
     </article>
   );
 }

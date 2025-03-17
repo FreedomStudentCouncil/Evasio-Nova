@@ -1,13 +1,11 @@
 // サーバーコンポーネントに変換
 import { Suspense } from "react";
 import UserProfilePageClient from "../../../../components/UserProfilePageClient";
+import { generateStaticUserParams } from "../../staticParams";
 
 // 静的ページを生成するためのパラメータを提供
 export async function generateStaticParams() {
-  // 空の配列を返すだけでもOK - 静的ビルド時にダイナミックルートを生成しない
-  return [
-    { id: "placeholder" } // ビルド時にプレースホルダーページを1つ生成
-  ];
+  return generateStaticUserParams();
 }
 
 // サーバーコンポーネントとして、クライアントコンポーネントをラップする
