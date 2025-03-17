@@ -6,6 +6,7 @@ import { generateStaticWikiParams } from "../../staticParams";
 
 // 静的ページを生成するための情報を提供する関数
 export async function generateStaticParams() {
+  console.log("Generating static wiki article params...");
   return generateStaticWikiParams();
 }
 

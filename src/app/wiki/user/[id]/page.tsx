@@ -5,6 +5,7 @@ import { generateStaticUserParams } from "../../staticParams";
 
 // 静的ページを生成するためのパラメータを提供
 export async function generateStaticParams() {
+  console.log("Generating static user profile params...");
   const params = await generateStaticUserParams();
   console.log("User profile static params:", params);
   return params;
