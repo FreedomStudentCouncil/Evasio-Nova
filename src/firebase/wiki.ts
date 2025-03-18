@@ -11,7 +11,10 @@ import {
   orderBy, 
   Timestamp,
   serverTimestamp,
-  increment
+  increment,
+  limit,
+  startAfter,
+  FieldValue
 } from 'firebase/firestore';
 import { db } from './config';
 
@@ -30,6 +33,18 @@ export interface WikiArticle {
   lastUpdated?: Timestamp;
   usefulCount: number;
   likeCount: number;
+}
+
+// コメントの型定義を修正
+export interface WikiComment {
+  id?: string;
+  articleId: string;
+  content: string;
+  author: string | null;
+  authorId: string | null;
+  date: Timestamp | string | FieldValue; // FieldValueを追加
+  parentId?: string | null; // 返信の場合、親コメントのID
+  replyCount?: number;
 }
 
 // 記事コレクションへの参照
@@ -233,6 +248,121 @@ export async function incrementLikeCount(id: string): Promise<void> {
     });
   } catch (error) {
     console.error('「いいね」カウント更新エラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * 記事のコメントを取得する
+ * @param articleId 記事ID
+ * @param lastComment 前回の最後のコメント（ページネーション用）
+ * @param itemsPerPage 1ページあたりのコメント数
+ * @returns コメント一覧
+ */
+export async function getArticleComments(
+  articleId: string, 
+  lastComment: WikiComment | null = null, 
+  itemsPerPage: number = 10
+): Promise<WikiComment[]> {
+  try {
+    // トップレベルコメントのみを取得（parentIdがnull）
+    let q = query(
+      collection(db, 'wikiComments'),
+      where('articleId', '==', articleId),
+      where('parentId', '==', null),
+      orderBy('date', 'desc'),
+      limit(itemsPerPage)
+    );
+    
+    // ページネーション: 前回の最後のコメント以降を取得
+    if (lastComment) {
+      q = query(
+        collection(db, 'wikiComments'),
+        where('articleId', '==', articleId),
+        where('parentId', '==', null),
+        orderBy('date', 'desc'),
+        startAfter(lastComment.date),
+        limit(itemsPerPage)
+      );
+    }
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as WikiComment[];
+  } catch (error) {
+    console.error('コメント取得エラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * コメントの返信を取得する
+ * @param commentId 親コメントID
+ * @param lastReply 前回の最後の返信（ページネーション用）
+ * @param itemsPerPage 1ページあたりの返信数
+ * @returns 返信一覧
+ */
+export async function getCommentReplies(
+  commentId: string, 
+  lastReply: WikiComment | null = null, 
+  itemsPerPage: number = 5
+): Promise<WikiComment[]> {
+  try {
+    let q = query(
+      collection(db, 'wikiComments'),
+      where('parentId', '==', commentId),
+      orderBy('date', 'asc'),
+      limit(itemsPerPage)
+    );
+    
+    if (lastReply) {
+      q = query(
+        collection(db, 'wikiComments'),
+        where('parentId', '==', commentId),
+        orderBy('date', 'asc'),
+        startAfter(lastReply.date),
+        limit(itemsPerPage)
+      );
+    }
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as WikiComment[];
+  } catch (error) {
+    console.error('返信取得エラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * 新しいコメントを追加する
+ * @param comment コメントデータ
+ * @returns 追加されたコメントのID
+ */
+export async function addComment(comment: Omit<WikiComment, 'id'>): Promise<string> {
+  try {
+    const commentsRef = collection(db, 'wikiComments');
+    const docRef = await addDoc(commentsRef, {
+      ...comment,
+      date: serverTimestamp(),
+      replyCount: 0
+    });
+    
+    // 親コメントがある場合は返信カウントを増やす
+    if (comment.parentId) {
+      const parentRef = doc(db, 'wikiComments', comment.parentId);
+      await updateDoc(parentRef, {
+        replyCount: increment(1)
+      });
+    }
+    
+    return docRef.id;
+  } catch (error) {
+    console.error('コメント追加エラー:', error);
     throw error;
   }
 }
