@@ -147,7 +147,7 @@ export default function Home() {
                   transition={{ duration: 0.4, delay: index * 0.1 }}
                   whileHover={{ y: -5, transition: { duration: 0.2 } }}
                 >
-                  <Link href={`/wiki/${article.id}`}>
+                  <Link href={`/wiki/view?id=${article.id}`}>
                     <div className="bg-white/10 backdrop-blur-md p-6 rounded-xl border border-white/20 h-full hover:bg-white/15 transition-all duration-300">
                       <h3 className="text-xl font-semibold mb-4">{article.title}</h3>
                       {article.description && (

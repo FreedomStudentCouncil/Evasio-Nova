@@ -139,7 +139,7 @@ export default function EditWikiPageClient() {
           <h2 className="text-2xl font-bold mb-4">編集権限がありません</h2>
           <p className="text-slate-300 mb-6">この記事はあなたが作成したものではないため、編集できません。</p>
           
-          <Link href={`/wiki/${articleId}`}>
+          <Link href={`/wiki/view?id=${articleId}`}>
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -218,7 +218,7 @@ export default function EditWikiPageClient() {
       await updateArticle(articleId, articleData);
       
       // 成功したら記事表示ページへリダイレクト
-      router.push(`/wiki/${articleId}`);
+      router.push(`/wiki/view?id=${articleId}`);
     } catch (error) {
       console.error("記事の更新エラー:", error);
       setError("記事の更新に失敗しました。もう一度お試しください。");
@@ -231,7 +231,7 @@ export default function EditWikiPageClient() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white">
       <div className="container mx-auto px-4 py-12">
         <div className="max-w-4xl mx-auto">
-          <Link href={`/wiki/${articleId}`}>
+          <Link href={`/wiki/view?id=${articleId}`}>
             <motion.button
               whileHover={{ x: -5 }}
               whileTap={{ scale: 0.95 }}
@@ -437,7 +437,7 @@ export default function EditWikiPageClient() {
                   <FiSave className="mr-2" /> {isSubmitting ? '更新中...' : '変更を保存'}
                 </motion.button>
                 
-                <Link href={`/wiki/${articleId}`} className="flex-1">
+                <Link href={`/wiki/view?id=${articleId}`} className="flex-1">
                   <motion.button
                     type="button"
                     whileHover={{ y: -2 }}

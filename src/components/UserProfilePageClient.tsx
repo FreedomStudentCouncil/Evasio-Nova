@@ -118,7 +118,7 @@ export default function UserProfilePageClient() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1, duration: 0.4 }}
                 >
-                  <Link href={`/wiki/view/${article.id}`}>
+                  <Link href={`/wiki/view?id=${article.id}`}>
                     <motion.div 
                       whileHover={{ y: -5 }}
                       transition={{ duration: 0.2 }}
