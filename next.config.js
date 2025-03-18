@@ -38,7 +38,7 @@ const nextConfig = {
     typescript: {
       ignoreBuildErrors: true,
     },
-  }),
+  })
 };
 
 console.log(`Building in ${isProductionBuild ? 'PRODUCTION' : 'DEVELOPMENT'} mode`);

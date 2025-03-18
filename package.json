@@ -6,8 +6,6 @@
     "dev": "next dev",
     "build": "next build",
     "build:static": "cross-env NEXT_PUBLIC_BUILD_MODE=production next build",
-    "prepare-data": "node scripts/generate-wiki-data.js",
-    "build:full": "npm run prepare-data && npm run build:static",
     "start": "next start",
     "lint": "next lint",
     "deploy": "firebase deploy",

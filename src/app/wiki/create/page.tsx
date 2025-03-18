@@ -119,8 +119,8 @@ export default function CreateWikiPage() {
       // Firestoreに保存
       const articleId = await createArticle(articleData);
       
-      // 成功したら記事表示ページへリダイレクト
-      router.push(`/wiki/${articleId}`);
+      // 成功したら記事表示ページへリダイレクト - クエリパラメータ方式に変更
+      router.push(`/wiki/view?id=${articleId}`);
     } catch (error) {
       console.error("記事の投稿エラー:", error);
       setError("記事の投稿に失敗しました。もう一度お試しください。");
