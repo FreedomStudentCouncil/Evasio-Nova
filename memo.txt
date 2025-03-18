@@ -68,7 +68,7 @@ firebaseのルールはread: true, write: authenticationで認可されたユー
 - Firebase Firestore
   - 専門家用: Googleログインによる認証
   - 一般利用者: ログイン不要
-- Imgur API
+- ImgBB API
   - wiki投稿時の画像保存に利用
 
  ワークフロー
