@@ -18,24 +18,26 @@ service cloud.firestore {
       // 認証済みユーザーのみ記事を作成可能
       allow create: if isAuthenticated();
       
-      // 記事の作成者のみが編集・削除可能
-      allow update, delete: if isAuthenticated() && isOwner(resource.data.authorId);
+      // usefulCountとlikeCountのフィールドのみの更新は誰でも可能
+      allow update: if 
+        isAuthenticated() && isOwner(resource.data.authorId) || 
+        (
+          request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['usefulCount', 'likeCount'])
+        );
+      
+      // 記事の削除は作成者のみ可能
+      allow delete: if isAuthenticated() && isOwner(resource.data.authorId);
       
       // コメントのルール - コメントは記事のサブコレクション
       match /comments/{commentId} {
-        // すべてのユーザーがコメントを閲覧可能および作成可能
-        allow read, create: if true;
-        
-        // コメント作成者のみが編集・削除可能
-        allow update, delete: if isAuthenticated() && isOwner(resource.data.authorId);
+        // すべてのユーザーがコメントを閲覧・作成・編集・削除可能
+        allow read, write: if true;
         
         // 返信のルール - 返信はコメントのサブコレクション
         match /replies/{replyId} {
-          // すべてのユーザーが返信を閲覧可能および作成可能
-          allow read, create: if true;
-          
-          // 返信作成者のみが編集・削除可能
-          allow update, delete: if isAuthenticated() && isOwner(resource.data.authorId);
+          // すべてのユーザーが返信を閲覧・作成・編集・削除可能
+          allow read, write: if true;
         }
       }
     }
@@ -50,13 +52,8 @@ service cloud.firestore {
     // 評価（使えた！・いいね）のルール
     match /ratings/{ratingId} {
       // すべてのユーザーが評価の総数を閲覧可能
-      allow read: if true;
+      allow update, delete, create,read: if true;
       
-      // 認証済みユーザーのみ評価可能
-      allow create: if isAuthenticated();
-      
-      // 自分の評価のみ変更・削除可能
-      allow update, delete: if isAuthenticated() && isOwner(resource.data.userId);
     }
   }
 }

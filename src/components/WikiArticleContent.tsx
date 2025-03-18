@@ -75,15 +75,16 @@ export default function WikiArticleContent() {
   
   // いいねを追加
   const handleLike = async () => {
-    if (!user || likedByUser || !articleId) return;
+    if (likedByUser || !articleId) return;
     
     try {
       await incrementLikeCount(articleId);
       
       // ローカルストレージに保存して二重評価を防止
-      const likedArticles = JSON.parse(localStorage.getItem(`liked_articles_${user.uid}`) || '[]');
+      const storageKey = user ? `liked_articles_${user.uid}` : 'liked_articles_anonymous';
+      const likedArticles = JSON.parse(localStorage.getItem(storageKey) || '[]');
       likedArticles.push(articleId);
-      localStorage.setItem(`liked_articles_${user.uid}`, JSON.stringify(likedArticles));
+      localStorage.setItem(storageKey, JSON.stringify(likedArticles));
       
       // 状態を更新
       setLikedByUser(true);
@@ -99,15 +100,16 @@ export default function WikiArticleContent() {
   
   // 役に立ったを追加
   const handleUseful = async () => {
-    if (!user || usefulMarkedByUser || !articleId) return;
+    if (usefulMarkedByUser || !articleId) return;
     
     try {
       await incrementUsefulCount(articleId);
       
       // ローカルストレージに保存して二重評価を防止
-      const usefulArticles = JSON.parse(localStorage.getItem(`useful_articles_${user.uid}`) || '[]');
+      const storageKey = user ? `useful_articles_${user.uid}` : 'useful_articles_anonymous';
+      const usefulArticles = JSON.parse(localStorage.getItem(storageKey) || '[]');
       usefulArticles.push(articleId);
-      localStorage.setItem(`useful_articles_${user.uid}`, JSON.stringify(usefulArticles));
+      localStorage.setItem(storageKey, JSON.stringify(usefulArticles));
       
       // 状態を更新
       setUsefulMarkedByUser(true);
@@ -249,13 +251,11 @@ export default function WikiArticleContent() {
             <button
               type="button"
               onClick={handleUseful}
-              disabled={usefulMarkedByUser || !user}
+              disabled={usefulMarkedByUser}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
                 usefulMarkedByUser
                   ? 'bg-green-500/40 text-green-300 cursor-default'
-                  : user
-                  ? 'bg-green-500/20 hover:bg-green-500/30 text-green-400'
-                  : 'bg-gray-500/20 text-gray-400 cursor-not-allowed'
+                  : 'bg-green-500/20 hover:bg-green-500/30 text-green-400'
               }`}
             >
               <motion.div
@@ -275,13 +275,11 @@ export default function WikiArticleContent() {
             <button
               type="button"
               onClick={handleLike}
-              disabled={likedByUser || !user}
+              disabled={likedByUser}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
                 likedByUser
                   ? 'bg-pink-500/40 text-pink-300 cursor-default'
-                  : user
-                  ? 'bg-pink-500/20 hover:bg-pink-500/30 text-pink-400'
-                  : 'bg-gray-500/20 text-gray-400 cursor-not-allowed'
+                  : 'bg-pink-500/20 hover:bg-pink-500/30 text-pink-400'
               }`}
             >
               <motion.div
