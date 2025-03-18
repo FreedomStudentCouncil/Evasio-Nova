@@ -192,6 +192,7 @@ Evasio-Nova/
 
 - すべての貢献者とコミュニティメンバー
 - [Next.js](https://nextjs.org/) チームと [Vercel](https://vercel.com/) 
+- I LOVE Render.com!!
 - [Firebase](https://firebase.google.com/) チーム
 - その他のオープンソースプロジェクトと開発者たち
 
