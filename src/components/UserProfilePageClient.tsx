@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { FiArrowLeft, FiUser, FiCalendar, FiCheckCircle, FiThumbsUp, FiAlertTriangle } from "react-icons/fi";
@@ -7,11 +8,9 @@ import { getUserArticles, WikiArticle } from "../firebase/wiki";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase/config";
 
-interface UserProfilePageClientProps {
-  userId: string;
-}
-
-export default function UserProfilePageClient({ userId }: UserProfilePageClientProps) {
+export default function UserProfilePageClient() {
+  const searchParams = useSearchParams();
+  const userId = searchParams.get("id") || "";
   const [articles, setArticles] = useState<WikiArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState<string>("ユーザー");
@@ -53,6 +52,19 @@ export default function UserProfilePageClient({ userId }: UserProfilePageClientP
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white flex justify-center items-center">
         <div className="text-xl">読み込み中...</div>
+      </div>
+    );
+  }
+
+  // IDがない場合のUI
+  if (!userId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white flex justify-center items-center">
+        <div className="bg-amber-900/30 border border-amber-500 rounded-lg p-6 text-center max-w-lg">
+          <h2 className="text-xl font-bold text-amber-400 mb-2">ユーザーIDが指定されていません</h2>
+          <p className="text-white">適切なユーザーIDをクエリパラメータとして指定してください。</p>
+          <p className="text-gray-400 mt-4">例: /wiki/user?id=user-123</p>
+        </div>
       </div>
     );
   }

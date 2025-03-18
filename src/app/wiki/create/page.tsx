@@ -8,8 +8,7 @@ import Image from "next/image";
 import { useAuth } from "../../../context/AuthContext";
 import ImageUploader from "../../../components/ImageUploader";
 import { createArticle } from "../../../firebase/wiki";
-// /app/wiki/user/[id]/page.tsx など
-export const dynamicParams = true; // または false
+
 export default function CreateWikiPage() {
   const router = useRouter();
   const { user } = useAuth();

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { FiSave, FiX, FiImage, FiArrowLeft, FiTag, FiAlertCircle } from "react-icons/fi";
 import Link from "next/link";
@@ -9,13 +9,12 @@ import { useAuth } from "../context/AuthContext";
 import ImageUploader from "./ImageUploader";
 import { getArticleById, updateArticle, WikiArticle } from "../firebase/wiki";
 
-interface EditWikiPageClientProps {
-  articleId: string;
-}
 
-export default function EditWikiPageClient({ articleId }: EditWikiPageClientProps) {
+export default function EditWikiPageClient() {
   const router = useRouter();
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const articleId = searchParams.get("id") || "";
   
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -64,6 +63,19 @@ export default function EditWikiPageClient({ articleId }: EditWikiPageClientProp
     
     fetchArticleData();
   }, [articleId, user]);
+
+  // IDがない場合のUIを追加
+  if (!articleId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white flex justify-center items-center">
+        <div className="bg-amber-900/30 border border-amber-500 rounded-lg p-6 text-center max-w-lg">
+          <h2 className="text-xl font-bold text-amber-400 mb-2">記事IDが指定されていません</h2>
+          <p className="text-white">編集する記事のIDをクエリパラメータとして指定してください。</p>
+          <p className="text-gray-400 mt-4">例: /wiki/edit?id=article-123</p>
+        </div>
+      </div>
+    );
+  }
 
   // 認証チェック
   if (!user) {

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:static": "cross-env NEXT_PUBLIC_BUILD_MODE=production next build",
+    "build:full": "cross-env NEXT_PUBLIC_BUILD_MODE=production next build",
     "start": "next start",
     "lint": "next lint",
     "deploy": "firebase deploy",

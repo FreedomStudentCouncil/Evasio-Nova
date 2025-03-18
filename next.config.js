@@ -23,22 +23,21 @@ const nextConfig = {
   ...commonConfig,
   
   // 本番ビルドモード時のみ静的エクスポートを有効化
-  ...(isProductionBuild && { 
-    output: 'export',
-    trailingSlash: true,
-    // 静的エクスポート時のみ必要な設定
-    images: {
-      ...commonConfig.images,
-      unoptimized: true,
-    },
-    // 本番ビルドでは各種エラーで失敗しないようにする
-    eslint: {
-      ignoreDuringBuilds: true,
-    },
-    typescript: {
-      ignoreBuildErrors: true,
-    },
-  })
+  output: isProductionBuild ? 'export' : undefined,
+  trailingSlash: isProductionBuild,
+  // 静的エクスポート時のみ必要な設定
+  images: {
+    ...commonConfig.images,
+    domains: ['firebasestorage.googleapis.com'],
+    unoptimized: isProductionBuild,
+  },
+  // 本番ビルドでは各種エラーで失敗しないようにする
+  eslint: {
+    ignoreDuringBuilds: isProductionBuild,
+  },
+  typescript: {
+    ignoreBuildErrors: isProductionBuild,
+  },
 };
 
 console.log(`Building in ${isProductionBuild ? 'PRODUCTION' : 'DEVELOPMENT'} mode`);
