@@ -227,21 +227,27 @@ export default function WikiArticleContent() {
           <div className="flex items-center">
             {user && article.authorId === user.uid && (
               <Link href={`/wiki/edit?id=${article.id}`}>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                {/* buttonタグにtype属性を追加 */}
+                <button
+                  type="button"
                   className="flex items-center text-blue-400 bg-blue-500/20 hover:bg-blue-500/30 transition-colors px-4 py-2 rounded-lg"
                 >
-                  <FiEdit className="mr-2" /> 編集
-                </motion.button>
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="flex items-center"
+                  >
+                    <FiEdit className="mr-2" /> 編集
+                  </motion.div>
+                </button>
               </Link>
             )}
           </div>
           
           <div className="flex gap-3">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+            {/* 「使えた！」ボタンにtype属性を追加 */}
+            <button
+              type="button"
               onClick={handleUseful}
               disabled={usefulMarkedByUser || !user}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
@@ -252,16 +258,22 @@ export default function WikiArticleContent() {
                   : 'bg-gray-500/20 text-gray-400 cursor-not-allowed'
               }`}
             >
-              <FiCheckCircle />
-              <span>使えた！</span>
-              <span className="bg-white/10 px-2 py-0.5 rounded-full text-sm">
-                {article.usefulCount || 0}
-              </span>
-            </motion.button>
+              <motion.div
+                whileHover={!usefulMarkedByUser && user ? { scale: 1.05 } : {}}
+                whileTap={!usefulMarkedByUser && user ? { scale: 0.95 } : {}}
+                className="flex items-center gap-2"
+              >
+                <FiCheckCircle />
+                <span>使えた！</span>
+                <span className="bg-white/10 px-2 py-0.5 rounded-full text-sm">
+                  {article.usefulCount || 0}
+                </span>
+              </motion.div>
+            </button>
             
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+            {/* 「いいね」ボタンにtype属性を追加 */}
+            <button
+              type="button"
               onClick={handleLike}
               disabled={likedByUser || !user}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
@@ -272,12 +284,18 @@ export default function WikiArticleContent() {
                   : 'bg-gray-500/20 text-gray-400 cursor-not-allowed'
               }`}
             >
-              <FiThumbsUp />
-              <span>いいね</span>
-              <span className="bg-white/10 px-2 py-0.5 rounded-full text-sm">
-                {article.likeCount || 0}
-              </span>
-            </motion.button>
+              <motion.div
+                whileHover={!likedByUser && user ? { scale: 1.05 } : {}}
+                whileTap={!likedByUser && user ? { scale: 0.95 } : {}}
+                className="flex items-center gap-2"
+              >
+                <FiThumbsUp />
+                <span>いいね</span>
+                <span className="bg-white/10 px-2 py-0.5 rounded-full text-sm">
+                  {article.likeCount || 0}
+                </span>
+              </motion.div>
+            </button>
           </div>
         </div>
         

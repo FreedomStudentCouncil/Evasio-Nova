@@ -16,10 +16,13 @@ import {
 } from "firebase/firestore";
 import {
   WikiComment,
+  WikiReply,
   getArticleComments,
   getCommentReplies,
   addComment,
-  incrementCommentLikeCount
+  addReply,
+  incrementCommentLikeCount,
+  incrementReplyLikeCount
 } from "../firebase/wiki";
 import { User } from "firebase/auth";
 
@@ -93,13 +96,14 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
 
   // コメント返信を読み込む
   const fetchReplies = async (commentId: string, reset: boolean = false) => {
-    if (!commentId || replyLoading[commentId] || (!hasMoreReplies[commentId] && !reset)) return;
+    if (!articleId || !commentId || replyLoading[commentId] || (!hasMoreReplies[commentId] && !reset)) return;
     
     setReplyLoading(prev => ({ ...prev, [commentId]: true }));
     try {
       const repliesData = await getCommentReplies(
+        articleId,
         commentId,
-        reset ? null : lastReplies[commentId] || null
+        reset ? null : (lastReplies[commentId] as WikiReply | null)
       );
       
       // 新しい返信で初期化するかリストに追加
@@ -144,15 +148,15 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
     setCommentError(null);
     
     try {
-      await addComment({
+      await addComment(
         articleId,
-        content: commentText.trim(),
-        author: user?.displayName || "匿名ユーザー",
-        authorId: user?.uid || null,
-        date: serverTimestamp(),
-        parentId: null,
-        likeCount: 0 // いいねカウント初期値
-      });
+        {
+          content: commentText.trim(),
+          author: user?.displayName || "匿名ユーザー",
+          authorId: user?.uid || null,
+          date: serverTimestamp(),
+        }
+      );
       
       // コメント入力をクリアして最新のコメントを再取得
       setCommentText("");
@@ -173,15 +177,16 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
     setSubmittingComment(true);
     
     try {
-      await addComment({
+      await addReply(
         articleId,
-        content: replyText.trim(),
-        author: user?.displayName || "匿名ユーザー",
-        authorId: user?.uid || null,
-        date: serverTimestamp(),
         parentId,
-        likeCount: 0 // いいねカウント初期値
-      });
+        {
+          content: replyText.trim(),
+          author: user?.displayName || "匿名ユーザー",
+          authorId: user?.uid || null,
+          date: serverTimestamp()
+        }
+      );
       
       // 返信入力をクリアするが、返信フォームは閉じない
       setReplyText("");
@@ -229,10 +234,10 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
   
   // コメントにいいねを追加
   const handleLikeComment = async (commentId: string) => {
-    if (!commentId || !user || likedComments.has(commentId)) return;
+    if (!articleId || !commentId || !user || likedComments.has(commentId)) return;
     
     try {
-      await incrementCommentLikeCount(commentId);
+      await incrementCommentLikeCount(articleId, commentId);
       
       // ローカルストレージに保存して二重いいねを防止
       const updatedLikedComments = Array.from(likedComments);
@@ -261,6 +266,36 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
       });
     } catch (err) {
       console.error("コメントへのいいね追加に失敗しました:", err);
+    }
+  };
+
+  // 返信にいいねを追加
+  const handleLikeReply = async (commentId: string, replyId: string) => {
+    if (!articleId || !commentId || !replyId || !user || likedComments.has(replyId)) return;
+    
+    try {
+      await incrementReplyLikeCount(articleId, commentId, replyId);
+      
+      // ローカルストレージに保存して二重いいねを防止
+      const updatedLikedComments = Array.from(likedComments);
+      updatedLikedComments.push(replyId);
+      localStorage.setItem(`liked_comments_${user.uid}`, JSON.stringify(updatedLikedComments));
+      setLikedComments(new Set(updatedLikedComments));
+      
+      // 返信コメントのいいねカウントを更新
+      setCommentReplies(prev => {
+        const newReplies = { ...prev };
+        if (newReplies[commentId]) {
+          newReplies[commentId] = newReplies[commentId].map(reply =>
+            reply.id === replyId ? 
+            { ...reply, likeCount: (reply.likeCount || 0) + 1 } : 
+            reply
+          );
+        }
+        return newReplies;
+      });
+    } catch (err) {
+      console.error("返信へのいいね追加に失敗しました:", err);
     }
   };
   
@@ -299,10 +334,8 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
           )}
           
           <div className="flex justify-end">
-            <motion.button
+            <button
               type="submit"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
               disabled={submittingComment || !commentText.trim()}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
                 submittingComment || !commentText.trim()
@@ -310,9 +343,15 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
                   : 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-400'
               }`}
             >
-              <FiSend size={16} />
-              <span>投稿する</span>
-            </motion.button>
+              <motion.div
+                whileHover={!submittingComment && commentText.trim() ? { scale: 1.05 } : {}}
+                whileTap={!submittingComment && commentText.trim() ? { scale: 0.95 } : {}}
+                className="flex items-center gap-2"
+              >
+                <FiSend size={16} />
+                <span>投稿する</span>
+              </motion.div>
+            </button>
           </div>
         </div>
       </form>
@@ -351,6 +390,7 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
                   
                   {/* いいねボタン */}
                   <button
+                    type="button"
                     onClick={() => comment.id && handleLikeComment(comment.id)}
                     disabled={toBool(!user || (comment.id && likedComments.has(comment.id)))}
                     className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs transition-colors ${
@@ -374,6 +414,7 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
                 {/* コメントアクション */}
                 <div className="ml-10 flex justify-between items-center">
                   <button
+                    type="button"
                     onClick={() => comment.id && setActiveReplyTo(activeReplyTo === comment.id ? null : comment.id)}
                     className="text-blue-400 hover:text-blue-300 text-sm flex items-center"
                   >
@@ -384,6 +425,7 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
                   {/* コメントに返信がある場合のみ表示 */}
                   {comment.id && comment.replyCount && comment.replyCount > 0 ? (
                     <button
+                      type="button"
                       onClick={() => comment.id && toggleComment(comment.id)}
                       className="text-gray-400 hover:text-white text-sm flex items-center"
                     >
@@ -415,10 +457,9 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
                     />
                     
                     <div className="flex justify-end mt-2">
-                      <motion.button
+                      <button
+                        type="button"
                         onClick={() => comment.id && handleAddReply(comment.id)}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
                         disabled={toBool(submittingComment || !replyText.trim() || !comment.id)}
                         className={`flex items-center gap-2 px-3 py-1 text-sm rounded-lg transition-colors ${
                           submittingComment || !replyText.trim()
@@ -426,9 +467,15 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
                             : 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-400'
                         }`}
                       >
-                        <FiSend size={12} />
-                        <span>返信</span>
-                      </motion.button>
+                        <motion.div
+                          whileHover={!submittingComment && replyText.trim() && comment.id ? { scale: 1.05 } : {}}
+                          whileTap={!submittingComment && replyText.trim() && comment.id ? { scale: 0.95 } : {}}
+                          className="flex items-center gap-2"
+                        >
+                          <FiSend size={12} />
+                          <span>返信</span>
+                        </motion.div>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -467,7 +514,8 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
                               
                               {/* 返信へのいいねボタン */}
                               <button
-                                onClick={() => reply.id && handleLikeComment(reply.id)}
+                                type="button"
+                                onClick={() => reply.id && comment.id && handleLikeReply(comment.id, reply.id)}
                                 disabled={toBool(!user || (reply.id && likedComments.has(reply.id)))}
                                 className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs transition-colors ${
                                   !user
@@ -492,6 +540,7 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
                         {comment.id && hasMoreReplies[comment.id] && (
                           <div className="text-center pt-1">
                             <button
+                              type="button"
                               onClick={() => comment.id && fetchReplies(comment.id)}
                               disabled={replyLoading[comment.id]}
                               className="text-blue-400 hover:text-blue-300 text-sm inline-flex items-center"
@@ -511,16 +560,21 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
             {/* コメントをもっと読み込むボタン */}
             {hasMoreComments && (
               <div className="text-center pt-4 pb-2">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                <button
+                  type="button"
                   onClick={() => fetchComments()}
                   disabled={loadingComments}
                   className="px-6 py-2 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 rounded-lg transition-colors flex items-center gap-2 mx-auto"
                 >
-                  {loadingComments ? 'コメントを読み込み中...' : 'さらにコメントを読み込む'}
-                  {!loadingComments && <FiChevronDown size={18} />}
-                </motion.button>
+                  <motion.div
+                    whileHover={!loadingComments ? { scale: 1.05 } : {}}
+                    whileTap={!loadingComments ? { scale: 0.95 } : {}}
+                    className="flex items-center gap-2"
+                  >
+                    {loadingComments ? 'コメントを読み込み中...' : 'さらにコメントを読み込む'}
+                    {!loadingComments && <FiChevronDown size={18} />}
+                  </motion.div>
+                </button>
               </div>
             )}
           </>

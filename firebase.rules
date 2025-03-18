@@ -20,6 +20,24 @@ service cloud.firestore {
       
       // 記事の作成者のみが編集・削除可能
       allow update, delete: if isAuthenticated() && isOwner(resource.data.authorId);
+      
+      // コメントのルール - コメントは記事のサブコレクション
+      match /comments/{commentId} {
+        // すべてのユーザーがコメントを閲覧可能および作成可能
+        allow read, create: if true;
+        
+        // コメント作成者のみが編集・削除可能
+        allow update, delete: if isAuthenticated() && isOwner(resource.data.authorId);
+        
+        // 返信のルール - 返信はコメントのサブコレクション
+        match /replies/{replyId} {
+          // すべてのユーザーが返信を閲覧可能および作成可能
+          allow read, create: if true;
+          
+          // 返信作成者のみが編集・削除可能
+          allow update, delete: if isAuthenticated() && isOwner(resource.data.authorId);
+        }
+      }
     }
     
     // ユーザープロファイルのルール
@@ -27,12 +45,6 @@ service cloud.firestore {
       // 自分のデータのみ読み取り・書き込み可能
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && isOwner(userId);
-    }
-    
-    // コメントのルール - 誰でも読み書き可能に変更
-    match /wikiComments/{commentId} {
-      // すべてのユーザーがコメントを閲覧可能および作成・編集・削除可能
-      allow read, write: if true;
     }
     
     // 評価（使えた！・いいね）のルール
