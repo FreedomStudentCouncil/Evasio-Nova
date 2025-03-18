@@ -10,7 +10,7 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
     
-    // Wiki記事のルール
+    // Wiki記事のルール - メインDB（詳細なコンテンツとコメント用）
     match /wikiArticles/{articleId} {
       // すべてのユーザーが記事を閲覧可能
       allow read: if true;
@@ -18,42 +18,49 @@ service cloud.firestore {
       // 認証済みユーザーのみ記事を作成可能
       allow create: if isAuthenticated();
       
-      // usefulCountとlikeCountのフィールドのみの更新は誰でも可能
-      allow update: if 
-        isAuthenticated() && isOwner(resource.data.authorId) || 
-        (
-          request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['usefulCount', 'likeCount'])
-        );
+      // 記事の更新は作成者のみ可能
+      // 評価カウント（usefulCount, likeCount）はもう保存しないので、この条件は不要
+      allow update: if isAuthenticated() && isOwner(resource.data.authorId);
       
       // 記事の削除は作成者のみ可能
       allow delete: if isAuthenticated() && isOwner(resource.data.authorId);
       
       // コメントのルール - コメントは記事のサブコレクション
       match /comments/{commentId} {
-        // すべてのユーザーがコメントを閲覧・作成・編集・削除可能
-        allow read, write: if true;
+        // すべてのユーザーがコメントを閲覧・作成可能
+        allow read: if true;
+        allow create: if true;
+        
+        // コメントの更新・削除は作成者のみ可能
+        // ただしいいねカウントの更新は誰でも可能
+        allow update: if 
+          (isAuthenticated() && isOwner(resource.data.authorId)) || 
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount']));
+        
+        allow delete: if isAuthenticated() && isOwner(resource.data.authorId);
         
         // 返信のルール - 返信はコメントのサブコレクション
         match /replies/{replyId} {
-          // すべてのユーザーが返信を閲覧・作成・編集・削除可能
-          allow read, write: if true;
+          // すべてのユーザーが返信を閲覧・作成可能
+          allow read: if true;
+          allow create: if true;
+          
+          // 返信の更新・削除は作成者のみ可能
+          // ただしいいねカウントの更新は誰でも可能
+          allow update: if 
+            (isAuthenticated() && isOwner(resource.data.authorId)) || 
+            (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount']));
+            
+          allow delete: if isAuthenticated() && isOwner(resource.data.authorId);
         }
       }
     }
     
     // ユーザープロファイルのルール
     match /users/{userId} {
-      // 自分のデータのみ読み取り・書き込み可能
-      allow read: if isAuthenticated();
+      // プロフィールの読み取りはだれでも可能、書き込みは本人のみ
+      allow read: if true;
       allow write: if isAuthenticated() && isOwner(userId);
-    }
-    
-    // 評価（使えた！・いいね）のルール
-    match /ratings/{ratingId} {
-      // すべてのユーザーが評価の総数を閲覧可能
-      allow update, delete, create,read: if true;
-      
     }
   }
 }

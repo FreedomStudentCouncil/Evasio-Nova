@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 検索用DBでは認証が共有されないため、認証に頼らないルールを設定
+    
+    // 記事概要のルール - 検索用DB
+    match /articleSummaries/{articleId} {
+      // すべてのユーザーが記事概要を閲覧可能
+      allow read: if true;
+      
+      // 記事概要の作成は、必須フィールドのバリデーションのみ行う
+      allow create: if 
+        request.resource.data.keys().hasAll(['title', 'description', 'tags', 'author', 'authorId', 'date']) &&
+        request.resource.data.title is string &&
+        request.resource.data.description is string;
+      
+      // いいね・役に立ったカウントの更新は誰でも可能
+      // その他の更新は元の作者のIDを維持することを確認
+      allow update: if 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usefulCount', 'likeCount']) ||
+        request.resource.data.authorId == resource.data.authorId;
+      
+      // 削除は制限なし（メインDBとの整合性はアプリケーションコードで保証）
+      allow delete: if true;
+    }
+    
+    // タグ情報などのメタデータ
+    match /tags/{tagId} {
+      allow read: if true;  // タグ情報は誰でも読み取り可能
+      allow write: if true; // タグ情報は誰でも書き込み可能
+    }
+    
+    // 検索統計データ
+    match /searchStats/{statId} {
+      allow read: if true;  // 統計は誰でも読み取り可能
+      allow write: if false; // 書き込みは許可しない
+    }
+  }
+}

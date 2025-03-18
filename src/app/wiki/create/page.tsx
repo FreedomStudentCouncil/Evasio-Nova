@@ -162,20 +162,29 @@ export default function CreateWikiPage() {
         authorId: user.uid,
         imageUrl: images.length > 0 ? images[currentImageIndex].url : "",
         imageId: images.length > 0 ? images[currentImageIndex].id : "",
-        deleteUrl: images.length > 0 ? images[currentImageIndex].deleteUrl : "", // deleteUrlも保存
+        deleteUrl: images.length > 0 ? images[currentImageIndex].deleteUrl : "", 
         date: new Date().toISOString(),
         usefulCount: 0,
         likeCount: 0
       };
       
       // Firestoreに保存
+      console.log("記事の投稿を開始します...");
       const articleId = await createArticle(articleData);
+      console.log("記事の投稿に成功しました。ID:", articleId);
       
-      // 成功したら記事表示ページへリダイレクト - クエリパラメータ方式に変更
+      // 投稿完了メッセージをユーザーに表示
+      alert("記事の投稿が完了しました！");
+      
+      // 成功したら記事表示ページへリダイレクト
       router.push(`/wiki/view?id=${articleId}`);
     } catch (error) {
       console.error("記事の投稿エラー:", error);
       setError("記事の投稿に失敗しました。もう一度お試しください。");
+      // エラー詳細をコンソールに出力
+      if (error instanceof Error) {
+        console.error("エラー詳細:", error.message);
+      }
     } finally {
       setIsSubmitting(false);
     }

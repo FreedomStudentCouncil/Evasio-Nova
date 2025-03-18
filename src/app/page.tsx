@@ -4,16 +4,16 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { FiCheckCircle, FiHeart, FiArrowRight, FiLayers } from "react-icons/fi";
 import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
-import { db } from "../firebase/config";
+import { searchDb } from "../firebase/config"; // メインDBからsearchDBに変更
+import { ArticleSummary } from "../firebase/wiki"; // 型定義をインポート
 
-// 型定義
-interface Article {
+// 型定義（既存の型定義を拡張して、ArticleSummaryに基づく）
+interface Article extends Partial<ArticleSummary> {
   id: string;
   title: string;
   usefulCount: number;
   likeCount: number;
   description?: string;
-  createdAt?: Date;
 }
 
 export default function Home() {
@@ -24,7 +24,8 @@ export default function Home() {
   useEffect(() => {
     async function fetchPopularArticles() {
       try {
-        const articlesRef = collection(db, "wikiArticles");
+        // 検索用DBから記事概要を取得
+        const articlesRef = collection(searchDb, "articleSummaries"); // searchDbを使用
         const q = query(
           articlesRef, 
           orderBy("usefulCount", "desc"), 
@@ -40,7 +41,7 @@ export default function Home() {
             usefulCount: data.usefulCount || 0,
             likeCount: data.likeCount || 0,
             description: data.description || "",
-            createdAt: data.createdAt?.toDate?.() || new Date()
+            // date は Timestamp 型の可能性があるため、変換処理は避ける
           };
         });
         

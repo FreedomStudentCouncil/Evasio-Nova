@@ -1,11 +1,10 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getAuth } from 'firebase/auth';
 
-// Firebaseの設定
-// 注: 実際の値は環境変数から取得するか、適切な値に置き換えてください
-const firebaseConfig = {
+// メインデータベース（ユーザー情報、コメントなど）の設定
+const mainFirebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
@@ -14,24 +13,39 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Firebase初期化
-// 既に初期化されていない場合のみ初期化を行う
-let app: FirebaseApp;
+// 検索用データベース（記事概要、タグなど）の設定
+const searchFirebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_SEARCH_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_SEARCH_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_SEARCH_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_SEARCH_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_SEARCH_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_SEARCH_APP_ID,
+};
+
+// メインFirebase初期化
+let mainApp: FirebaseApp;
+let searchApp: FirebaseApp;
 
 // サーバーサイドレンダリング対応
-if (!getApps().length) {
-  app = initializeApp(firebaseConfig);
+if (!getApps().length || getApps().length < 2) {
+  // メインアプリとDBの初期化
+  mainApp = initializeApp(mainFirebaseConfig);
+  
+  // 検索用アプリとDBの初期化
+  // 2つ目のFirebaseアプリには名前を付ける必要があります
+  searchApp = initializeApp(searchFirebaseConfig, 'search-app');
 } else {
-  app = getApps()[0];
+  mainApp = getApps()[0];
+  searchApp = getApps()[1];
 }
 
-// Firestoreを初期化
-const db = getFirestore(app);
+// メインアプリのサービス初期化
+const db: Firestore = getFirestore(mainApp);
+const storage = getStorage(mainApp); // ストレージ初期化を復元
+const auth = getAuth(mainApp);
 
-// Storageを初期化
-const storage = getStorage(app);
+// 検索用アプリのサービス初期化
+const searchDb: Firestore = getFirestore(searchApp);
 
-// Authを初期化
-const auth = getAuth(app);
-
-export { app, db, storage, auth };
+export { mainApp, searchApp, db, searchDb, storage, auth };
