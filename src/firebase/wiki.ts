@@ -33,6 +33,7 @@ export interface WikiArticle {
   lastUpdated?: Timestamp;
   usefulCount: number;
   likeCount: number;
+  deleteUrl?: string;
 }
 
 // コメントの型定義を修正

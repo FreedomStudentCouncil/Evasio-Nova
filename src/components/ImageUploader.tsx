@@ -1,152 +1,150 @@
 "use client";
-import { useState, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { FiUpload, FiX, FiCheck, FiLoader } from 'react-icons/fi';
+import { useState } from 'react';
+import { uploadImage, UploadedImage } from '../imgbb/api';
 import Image from 'next/image';
-import { useImgur } from '../hooks/useImgur';
 
 interface ImageUploaderProps {
-  onUploadComplete: (imageUrl: string, imageId: string) => void;
+  onUploadComplete: (url: string, id: string, deleteUrl: string) => void;
+  onInsertMarkdown?: (markdown: string) => void;
   className?: string;
 }
 
-export default function ImageUploader({ onUploadComplete, className = '' }: ImageUploaderProps) {
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const { 
-    upload, 
-    handleFileChange, 
-    reset, 
-    isUploading, 
-    error, 
-    imageData, 
-    previewUrl 
-  } = useImgur({
-    onSuccess: (response) => {
-      onUploadComplete(response.link, response.id);
+export default function ImageUploader({ onUploadComplete, onInsertMarkdown, className }: ImageUploaderProps) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [uploadedImage, setUploadedImage] = useState<UploadedImage | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // ファイルサイズチェック（32MB制限）
+    if (file.size > 32 * 1024 * 1024) {
+      setError('ファイルサイズは32MB以下にしてください');
+      return;
     }
-  });
 
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
+    setLoading(true);
+    setError(null);
+    setUploadedImage(null);
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      handleFileChange(file);
-      await upload(file);
+    try {
+      const imageData = await uploadImage(file);
+      setUploadedImage(imageData);
+      onUploadComplete(imageData.url, imageData.id, imageData.deleteUrl);
+      e.target.value = '';
+    } catch (err: any) {
+      setError(err.message || '画像のアップロードに失敗しました');
+      console.error('アップロードエラー:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      handleFileChange(file);
-      await upload(file);
+  const handleInsertToContent = () => {
+    if (uploadedImage) {
+      const markdown = `![${uploadedImage.filename}](${uploadedImage.url})`;
+      onInsertMarkdown?.(markdown);
     }
-  };
-
-  const handleClickUpload = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleReset = () => {
-    reset();
   };
 
   return (
-    <div className={`${className}`}>
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileSelect}
-        accept="image/*"
-        className="hidden"
-      />
+    <div className={`my-4 ${className || ''}`}>
+      <label className="block mb-2">
+        <span className="text-gray-300">画像をアップロード（32MB以下）</span>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          disabled={loading}
+          className="block w-full text-sm text-gray-300
+            file:mr-4 file:py-2 file:px-4
+            file:rounded-full file:border-0
+            file:text-sm file:font-semibold
+            file:bg-blue-500/20 file:text-blue-300
+            hover:file:bg-blue-500/30
+            disabled:opacity-50 disabled:cursor-not-allowed"
+        />
+      </label>
       
-      {!previewUrl ? (
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onDragEnter={handleDragEnter}
-          onDragLeave={handleDragLeave}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-          onClick={handleClickUpload}
-          className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-6 cursor-pointer transition-colors
-            ${isDragging ? 'border-blue-500 bg-blue-500/10' : 'border-white/30 hover:border-white/50'}`}
-        >
-          <FiUpload className="text-3xl mb-2" />
-          <p className="text-center text-sm">
-            画像をドラッグ＆ドロップするか、クリックして選択
-          </p>
-          <p className="text-xs text-white/60 mt-1">
-            PNG, JPG, GIF 最大10MB
-          </p>
-        </motion.div>
-      ) : (
-        <div className="relative">
-          <div className="relative overflow-hidden rounded-lg">
-            {previewUrl && (
-              <div className="relative w-full h-64">
-                <Image
-                  src={previewUrl}
-                  alt="Preview"
-                  fill
-                  style={{objectFit: "contain"}}
-                  className="rounded-lg"
-                />
-                <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
-                  {isUploading ? (
-                    <FiLoader className="text-3xl animate-spin text-white" />
-                  ) : error ? (
-                    <div className="text-center p-4">
-                      <FiX className="text-3xl text-red-500 mx-auto mb-2" />
-                      <p className="text-sm text-red-300">アップロードエラー</p>
-                    </div>
-                  ) : imageData ? (
-                    <FiCheck className="text-3xl text-green-500" />
-                  ) : null}
-                </div>
-              </div>
-            )}
+      {loading && (
+        <div className="text-gray-400 mt-2">
+          <div className="flex items-center">
+            <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            アップロード中...
           </div>
-          
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={handleReset}
-            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
-          >
-            <FiX />
-          </motion.button>
         </div>
       )}
       
       {error && (
-        <p className="mt-2 text-xs text-red-400">
-          {error.message || 'アップロードに失敗しました。もう一度お試しください。'}
-        </p>
+        <div className="text-red-400 mt-2 p-2 bg-red-500/10 rounded">
+          {error}
+        </div>
       )}
+
+      {uploadedImage && (
+        <div className="mt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleInsertToContent}
+              className="px-4 py-2 bg-blue-500/20 text-blue-300 rounded-lg
+                hover:bg-blue-500/30 transition-colors flex items-center"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v9z" />
+              </svg>
+              本文に画像を追加
+            </button>
+            <button
+              type="button"
+              onClick={() => navigator.clipboard.writeText(uploadedImage.url)}
+              className="px-4 py-2 bg-gray-500/20 text-gray-300 rounded-lg
+                hover:bg-gray-500/30 transition-colors flex items-center"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+              </svg>
+              URLをコピー
+            </button>
+            <span className="text-sm text-gray-400">
+              {uploadedImage.filename}
+            </span>
+          </div>
+          <div className="mt-2 relative w-full h-40 bg-gray-800/50 rounded-lg overflow-hidden">
+            {imageLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-900/50 z-10">
+                <div className="flex items-center">
+                  <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  画像を読み込み中...
+                </div>
+              </div>
+            )}
+            <Image
+              src={uploadedImage.url}
+              alt={uploadedImage.filename}
+              fill
+              className="object-contain"
+              onLoadingComplete={() => setImageLoading(false)}
+              onLoad={() => setImageLoading(false)}
+              onLoadStart={() => setImageLoading(true)}
+            />
+          </div>
+        </div>
+      )}
+
+      <p className="text-sm text-gray-400 mt-2">
+        ※アップロードした画像は公開され、後から削除することが困難になる場合があります。
+        <br />
+        ※個人情報や機密情報を含む画像は絶対にアップロードしないでください。
+      </p>
     </div>
   );
 }
