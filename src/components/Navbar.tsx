@@ -53,7 +53,7 @@ export default function Navbar() {
             
             {user ? (
               <div className="flex items-center">
-                <Link href={`/wiki/user/${user.uid}`}>
+                <Link href={`/wiki/user?id=${user.uid}`}>
                   <motion.div 
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
