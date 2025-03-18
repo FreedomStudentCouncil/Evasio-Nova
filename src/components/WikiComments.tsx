@@ -1,13 +1,15 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import { 
   FiMessageCircle,
   FiCornerDownRight,
   FiSend,
   FiChevronDown,
   FiChevronUp,
-  FiUser
+  FiUser,
+  FiThumbsUp
 } from "react-icons/fi";
 import { 
   serverTimestamp,
@@ -16,7 +18,8 @@ import {
   WikiComment,
   getArticleComments,
   getCommentReplies,
-  addComment
+  addComment,
+  incrementCommentLikeCount
 } from "../firebase/wiki";
 import { User } from "firebase/auth";
 
@@ -42,8 +45,18 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
   const [replyLoading, setReplyLoading] = useState<{[key: string]: boolean}>({});
   const [lastReplies, setLastReplies] = useState<{[key: string]: WikiComment | null}>({});
   const [hasMoreReplies, setHasMoreReplies] = useState<{[key: string]: boolean}>({});
+  // いいね済みコメントを記録する状態
+  const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
 
   const commentsEndRef = useRef<HTMLDivElement>(null);
+
+  // ユーザーのいいね状態を確認
+  useEffect(() => {
+    if (user) {
+      const likedCommentIds = JSON.parse(localStorage.getItem(`liked_comments_${user.uid}`) || '[]');
+      setLikedComments(new Set(likedCommentIds));
+    }
+  }, [user]);
 
   // コメントを読み込む
   const fetchComments = useCallback(async (reset: boolean = false) => {
@@ -137,7 +150,8 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
         author: user?.displayName || "匿名ユーザー",
         authorId: user?.uid || null,
         date: serverTimestamp(),
-        parentId: null
+        parentId: null,
+        likeCount: 0 // いいねカウント初期値
       });
       
       // コメント入力をクリアして最新のコメントを再取得
@@ -165,12 +179,12 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
         author: user?.displayName || "匿名ユーザー",
         authorId: user?.uid || null,
         date: serverTimestamp(),
-        parentId
+        parentId,
+        likeCount: 0 // いいねカウント初期値
       });
       
-      // 返信入力をクリアして返信を展開、再取得
+      // 返信入力をクリアするが、返信フォームは閉じない
       setReplyText("");
-      setActiveReplyTo(null);
       
       // コメントの返信カウント表示を更新
       setComments(prev => prev.map(comment => 
@@ -182,6 +196,9 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
       // 既に展開している場合は返信を再取得
       if (parentId && expandedComments.has(parentId)) {
         fetchReplies(parentId, true);
+      } else {
+        // 返信が展開されていなければ展開する
+        toggleComment(parentId);
       }
       
     } catch (err) {
@@ -210,6 +227,46 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
     setExpandedComments(newExpanded);
   };
   
+  // コメントにいいねを追加
+  const handleLikeComment = async (commentId: string) => {
+    if (!commentId || !user || likedComments.has(commentId)) return;
+    
+    try {
+      await incrementCommentLikeCount(commentId);
+      
+      // ローカルストレージに保存して二重いいねを防止
+      const updatedLikedComments = Array.from(likedComments);
+      updatedLikedComments.push(commentId);
+      localStorage.setItem(`liked_comments_${user.uid}`, JSON.stringify(updatedLikedComments));
+      setLikedComments(new Set(updatedLikedComments));
+      
+      // コメントのいいねカウント表示を更新 (親コメントとリプライ両方)
+      setComments(prev => prev.map(comment => 
+        comment.id === commentId ? 
+        { ...comment, likeCount: (comment.likeCount || 0) + 1 } : 
+        comment
+      ));
+      
+      // 返信コメントのいいねカウントも更新
+      setCommentReplies(prev => {
+        const newReplies = { ...prev };
+        Object.keys(newReplies).forEach(parentId => {
+          newReplies[parentId] = newReplies[parentId].map(reply => 
+            reply.id === commentId ? 
+            { ...reply, likeCount: (reply.likeCount || 0) + 1 } : 
+            reply
+          );
+        });
+        return newReplies;
+      });
+    } catch (err) {
+      console.error("コメントへのいいね追加に失敗しました:", err);
+    }
+  };
+  
+  // Boolean型に変換するヘルパー関数を追加
+  const toBool = (value: any): boolean => !!value;
+
   // 日付フォーマットのヘルパー関数
   const formatDate = (timestamp: any) => {
     if (!timestamp) return '日付なし';
@@ -279,10 +336,34 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
                       <FiUser size={18} />
                     </div>
                     <div>
-                      <div className="font-medium">{comment.author || "匿名ユーザー"}</div>
+                      {comment.authorId ? (
+                        <Link href={`/wiki/user?id=${comment.authorId}`}>
+                          <div className="font-medium hover:text-blue-300 transition-colors">
+                            {comment.author || "匿名ユーザー"}
+                          </div>
+                        </Link>
+                      ) : (
+                        <div className="font-medium">{comment.author || "匿名ユーザー"}</div>
+                      )}
                       <div className="text-xs text-gray-400">{formatDate(comment.date)}</div>
                     </div>
                   </div>
+                  
+                  {/* いいねボタン */}
+                  <button
+                    onClick={() => comment.id && handleLikeComment(comment.id)}
+                    disabled={toBool(!user || (comment.id && likedComments.has(comment.id)))}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs transition-colors ${
+                      !user
+                        ? 'bg-gray-800/30 text-gray-500 cursor-not-allowed'
+                        : comment.id && likedComments.has(comment.id)
+                        ? 'bg-pink-500/40 text-pink-300 cursor-default'
+                        : 'bg-pink-500/20 hover:bg-pink-500/30 text-pink-300'
+                    }`}
+                  >
+                    <FiThumbsUp size={12} />
+                    <span>{comment.likeCount || 0}</span>
+                  </button>
                 </div>
                 
                 {/* コメント本文 */}
@@ -338,7 +419,7 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
                         onClick={() => comment.id && handleAddReply(comment.id)}
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        disabled={submittingComment || !replyText.trim() || !comment.id}
+                        disabled={toBool(submittingComment || !replyText.trim() || !comment.id)}
                         className={`flex items-center gap-2 px-3 py-1 text-sm rounded-lg transition-colors ${
                           submittingComment || !replyText.trim()
                             ? 'bg-gray-500/20 text-gray-400 cursor-not-allowed'
@@ -369,10 +450,36 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
                                   <FiUser size={14} />
                                 </div>
                                 <div>
-                                  <div className="text-sm font-medium">{reply.author || "匿名ユーザー"}</div>
+                                  {reply.authorId ? (
+                                    <Link href={`/wiki/user?id=${reply.authorId}`}>
+                                      <div className="text-sm font-medium hover:text-blue-300 transition-colors">
+                                        {reply.author || "匿名ユーザー"}
+                                      </div>
+                                    </Link>
+                                  ) : (
+                                    <div className="text-sm font-medium">
+                                      {reply.author || "匿名ユーザー"}
+                                    </div>
+                                  )}
                                   <div className="text-xs text-gray-400">{formatDate(reply.date)}</div>
                                 </div>
                               </div>
+                              
+                              {/* 返信へのいいねボタン */}
+                              <button
+                                onClick={() => reply.id && handleLikeComment(reply.id)}
+                                disabled={toBool(!user || (reply.id && likedComments.has(reply.id)))}
+                                className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs transition-colors ${
+                                  !user
+                                    ? 'bg-gray-800/30 text-gray-500 cursor-not-allowed'
+                                    : reply.id && likedComments.has(reply.id)
+                                    ? 'bg-pink-500/40 text-pink-300 cursor-default'
+                                    : 'bg-pink-500/20 hover:bg-pink-500/30 text-pink-300'
+                                }`}
+                              >
+                                <FiThumbsUp size={12} />
+                                <span>{reply.likeCount || 0}</span>
+                              </button>
                             </div>
                             
                             <div className="ml-8">

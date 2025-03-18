@@ -45,6 +45,7 @@ export interface WikiComment {
   date: Timestamp | string | FieldValue; // FieldValueを追加
   parentId?: string | null; // 返信の場合、親コメントのID
   replyCount?: number;
+  likeCount?: number; // いいね数を追加
 }
 
 // 記事コレクションへの参照
@@ -363,6 +364,23 @@ export async function addComment(comment: Omit<WikiComment, 'id'>): Promise<stri
     return docRef.id;
   } catch (error) {
     console.error('コメント追加エラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * コメントのいいねカウントを増やす
+ * @param commentId コメントID
+ * @returns 更新処理のPromise
+ */
+export async function incrementCommentLikeCount(commentId: string): Promise<void> {
+  try {
+    const commentRef = doc(db, 'wikiComments', commentId);
+    await updateDoc(commentRef, {
+      likeCount: increment(1)
+    });
+  } catch (error) {
+    console.error('コメントいいね更新エラー:', error);
     throw error;
   }
 }
