@@ -107,10 +107,23 @@ async function optimizeImage(file: File): Promise<Blob> {
   });
 }
 
-// 画像削除用の関数を追加
+// 画像削除用の関数を修正
 export async function deleteImage(deleteUrl: string): Promise<boolean> {
   try {
-    const response = await fetch(deleteUrl);
+    // delete_urlからIDを抽出
+    const deleteId = deleteUrl.split('/').pop();
+    if (!deleteId) return false;
+
+    const API_KEY = process.env.NEXT_PUBLIC_IMGBB_API_KEY;
+    if (!API_KEY) return false;
+
+    // ImgBB APIを使用して削除
+    const response = await fetch(`https://api.imgbb.com/1/image/delete/${deleteId}?key=${API_KEY}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) return false;
+
     const data = await response.json();
     return data.success || false;
   } catch (error) {

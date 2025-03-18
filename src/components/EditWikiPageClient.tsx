@@ -218,8 +218,11 @@ export default function EditWikiPageClient() {
 
   // 画像アップロード完了時の処理を修正
   const handleImageUploadComplete = (url: string, id: string, deleteUrl: string) => {
-    setImages([...images, { url, id, deleteUrl }]);
-    setCurrentImageIndex(images.length);
+    setImages(prev => {
+      const newImages = [...prev, { url, id, deleteUrl }];
+      setCurrentImageIndex(newImages.length - 1); // インデックスを修正
+      return newImages;
+    });
     setShowImageUploader(false);
   };
 
@@ -424,26 +427,28 @@ export default function EditWikiPageClient() {
                 ) : images.length > 0 ? (
                   <div className="space-y-4">
                     <div className="relative w-full h-64">
-                      <div className="absolute inset-0 flex items-center justify-between px-4 z-10">
-                        <motion.button
-                          type="button"
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={handlePrevImage}
-                          className="bg-black/50 text-white rounded-full p-2 hover:bg-black/70"
-                        >
-                          <FiChevronLeft size={24} />
-                        </motion.button>
-                        <motion.button
-                          type="button"
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={handleNextImage}
-                          className="bg-black/50 text-white rounded-full p-2 hover:bg-black/70"
-                        >
-                          <FiChevronRight size={24} />
-                        </motion.button>
-                      </div>
+                      {images.length > 1 && (
+                        <div className="absolute inset-0 flex items-center justify-between px-4 z-10">
+                          <motion.button
+                            type="button"
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={handlePrevImage}
+                            className="bg-black/50 text-white rounded-full p-2 hover:bg-black/70"
+                          >
+                            <FiChevronLeft size={24} />
+                          </motion.button>
+                          <motion.button
+                            type="button"
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={handleNextImage}
+                            className="bg-black/50 text-white rounded-full p-2 hover:bg-black/70"
+                          >
+                            <FiChevronRight size={24} />
+                          </motion.button>
+                        </div>
+                      )}
                       <Image 
                         src={images[currentImageIndex].url} 
                         alt={`画像 ${currentImageIndex + 1}`}
@@ -460,44 +465,73 @@ export default function EditWikiPageClient() {
                       >
                         <FiX />
                       </motion.button>
-                      <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex gap-2">
-                        {images.map((_, index) => (
-                          <button
-                            key={index}
-                            onClick={() => setCurrentImageIndex(index)}
-                            className={`w-2 h-2 rounded-full transition-colors ${
-                              index === currentImageIndex ? 'bg-white' : 'bg-white/50'
-                            }`}
-                          />
-                        ))}
+                      {images.length > 1 && (
+                        <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex gap-2">
+                          {images.map((_, index) => (
+                            <button
+                              key={index}
+                              onClick={() => setCurrentImageIndex(index)}
+                              className={`w-2 h-2 rounded-full transition-colors ${
+                                index === currentImageIndex ? 'bg-white' : 'bg-white/50'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <motion.button
+                        type="button"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setShowImageUploader(true)}
+                        className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors flex items-center"
+                      >
+                        <FiImage className="mr-2" /> 画像を追加
+                      </motion.button>
+                      <div className="flex gap-2">
+                        <motion.button
+                          type="button"
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => handleImageUpload(images[currentImageIndex].url)}
+                          className="px-4 py-2 bg-blue-500/20 text-blue-300 rounded-lg hover:bg-blue-500/30 transition-colors flex items-center"
+                        >
+                          <FiImage className="mr-2" />
+                          本文に画像を追加
+                        </motion.button>
+                        <motion.button
+                          type="button"
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => navigator.clipboard.writeText(images[currentImageIndex].url)}
+                          className="px-4 py-2 bg-gray-500/20 text-gray-300 rounded-lg hover:bg-gray-500/30 transition-colors flex items-center"
+                        >
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                          </svg>
+                          URLをコピー
+                        </motion.button>
                       </div>
                     </div>
-                    <div className="flex justify-end gap-2">
-                      <motion.button
-                        type="button"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleImageUpload(images[currentImageIndex].url)}
-                        className="px-4 py-2 bg-blue-500/20 text-blue-300 rounded-lg
-                          hover:bg-blue-500/30 transition-colors flex items-center"
-                      >
-                        <FiImage className="mr-2" />
-                        本文に画像を追加
-                      </motion.button>
-                      <motion.button
-                        type="button"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => navigator.clipboard.writeText(images[currentImageIndex].url)}
-                        className="px-4 py-2 bg-gray-500/20 text-gray-300 rounded-lg
-                          hover:bg-gray-500/30 transition-colors flex items-center"
-                      >
-                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                        </svg>
-                        URLをコピー
-                      </motion.button>
-                    </div>
+                    {showImageUploader && (
+                      <div className="border border-white/20 rounded-lg p-4 bg-white/5 mt-4">
+                        <ImageUploader 
+                          onUploadComplete={handleImageUploadComplete}
+                          onInsertMarkdown={handleInsertMarkdown}
+                          className="max-w-xl mx-auto"
+                        />
+                        <div className="flex justify-end mt-4">
+                          <button
+                            type="button"
+                            onClick={() => setShowImageUploader(false)}
+                            className="text-slate-300 hover:text-white text-sm"
+                          >
+                            キャンセル
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="border border-white/20 rounded-lg p-4 bg-white/5">
