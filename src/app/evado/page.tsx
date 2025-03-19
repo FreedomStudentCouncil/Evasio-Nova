@@ -31,6 +31,7 @@ export default function EvadoPage() {
   const [currentResult, setCurrentResult] = useState<Result | null>(null);
   const [history, setHistory] = useState<string[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
 
   useEffect(() => {
     try {
@@ -57,14 +58,16 @@ export default function EvadoPage() {
     }
   }, [currentQuestionId]);
 
-  const handleOptionSelect = (nextQuestionId: string | null) => {
+  const handleOptionSelect = (nextQuestionId: string | null, index: number) => {
     if (isAnimating || !nextQuestionId) return;
     
+    setSelectedChoice(index);
     setIsAnimating(true);
     setTimeout(() => {
       setHistory([...history, currentQuestionId]);
       setCurrentQuestionId(nextQuestionId);
       setIsAnimating(false);
+      setSelectedChoice(null);
     }, 300);
   };
 
@@ -165,28 +168,24 @@ export default function EvadoPage() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -50 }}
                 transition={{ duration: 0.3 }}
+                className="space-y-3"
               >
                 <h2 className="text-xl font-semibold mb-6">{currentQuestion.text}</h2>
                 
-                <div className="flex flex-col gap-3">
-                  {currentQuestion.choices.map((choice, index) => (
-                    <motion.button
-                      key={index}
-                      whileHover={{ scale: 1.03, backgroundColor: "rgba(255,255,255,0.15)" }}
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => handleOptionSelect(choice.nextQuestionId)}
-                      className="w-full py-3 px-4 bg-white/10 rounded-lg text-left hover:bg-white/15 transition-all duration-300"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ 
-                        opacity: 1, 
-                        y: 0,
-                        transition: { delay: index * 0.1 + 0.1 }
-                      }}
-                    >
-                      {choice.text}
-                    </motion.button>
-                  ))}
-                </div>
+                {currentQuestion.choices.map((choice, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleOptionSelect(choice.nextQuestionId, index)}
+                    className={`w-full py-3 px-4 bg-white/10 rounded-lg text-left transition-all duration-300 
+                      hover:scale-[1.03] active:scale-[0.97] relative overflow-hidden
+                      ${selectedChoice === index ? 'bg-white/20' : 'hover:bg-white/15'}
+                      ${selectedChoice === index ? 'before:absolute before:inset-0 before:bg-gradient-to-r before:from-blue-500/20 before:to-purple-500/20 before:animate-shimmer' : ''}
+                    `}
+                    disabled={isAnimating}
+                  >
+                    {choice.text}
+                  </button>
+                ))}
               </motion.div>
             </AnimatePresence>
             
