@@ -16,11 +16,25 @@ service cloud.firestore {
       allow read: if true;
       
       // 認証済みユーザーのみ記事を作成可能
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+                   request.resource.data.title is string &&
+                   request.resource.data.title.size() <= 30 &&
+                   request.resource.data.content is string &&
+                   request.resource.data.content.size() <= 10000 &&
+                   request.resource.data.tags is list &&
+                   request.resource.data.tags.size() > 0 &&
+                   request.resource.data.tags.size() <= 8;
       
       // 記事の更新は作成者のみ可能
-      // 評価カウント（usefulCount, likeCount）はもう保存しないので、この条件は不要
-      allow update: if isAuthenticated() && isOwner(resource.data.authorId);
+      allow update: if isAuthenticated() && 
+                   isOwner(resource.data.authorId) &&
+                   request.resource.data.title is string &&
+                   request.resource.data.title.size() <= 30 &&
+                   request.resource.data.content is string &&
+                   request.resource.data.content.size() <= 10000 &&
+                   request.resource.data.tags is list &&
+                   request.resource.data.tags.size() > 0 &&
+                   request.resource.data.tags.size() <= 8;
       
       // 記事の削除は作成者のみ可能
       allow delete: if isAuthenticated() && isOwner(resource.data.authorId);

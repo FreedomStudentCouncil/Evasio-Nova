@@ -68,11 +68,21 @@ export interface WikiReply extends WikiComment {
   parentId: string;
 }
 
+// タグの型定義を追加
+export interface Tag {
+  name: string;
+  count: number;
+  lastUsed: Timestamp | FieldValue;
+}
+
 // 記事コレクションへの参照（メインDB）
 const articlesRef = collection(db, 'wikiArticles');
 
 // 記事概要コレクションへの参照（検索用DB）
 const articleSummariesRef = collection(searchDb, 'articleSummaries');
+
+// タグコレクションへの参照（検索用DB）
+const tagsRef = collection(searchDb, 'tags');
 
 /**
  * 記事IDから記事データを取得する
@@ -626,6 +636,69 @@ export async function incrementReplyLikeCount(
     });
   } catch (error) {
     console.error('返信いいね更新エラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * すべてのタグを取得する
+ * @returns タグ一覧
+ */
+export async function getAllTags(): Promise<Tag[]> {
+  try {
+    const q = query(tagsRef, orderBy('count', 'desc'));
+    const querySnapshot = await getDocs(q);
+    
+    return querySnapshot.docs.map(doc => ({
+      name: doc.id,
+      ...doc.data()
+    })) as Tag[];
+  } catch (error) {
+    console.error('タグ取得エラー:', error);
+    return [];
+  }
+}
+
+/**
+ * タグを更新する（存在しない場合は作成）
+ * @param tagNames タグ名の配列
+ */
+export async function updateTags(tagNames: string[]): Promise<void> {
+  try {
+    const now = serverTimestamp();
+    
+    // 各タグに対して更新処理を実行
+    const updatePromises = tagNames.map(async (tagName) => {
+      const tagRef = doc(searchDb, 'tags', tagName);
+      await setDoc(tagRef, {
+        count: increment(1),
+        lastUsed: now
+      }, { merge: true });
+    });
+    
+    await Promise.all(updatePromises);
+  } catch (error) {
+    console.error('タグ更新エラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * タグの使用回数を減らす
+ * @param tagNames タグ名の配列
+ */
+export async function decrementTags(tagNames: string[]): Promise<void> {
+  try {
+    const updatePromises = tagNames.map(async (tagName) => {
+      const tagRef = doc(searchDb, 'tags', tagName);
+      await updateDoc(tagRef, {
+        count: increment(-1)
+      });
+    });
+    
+    await Promise.all(updatePromises);
+  } catch (error) {
+    console.error('タグ更新エラー:', error);
     throw error;
   }
 }

@@ -12,13 +12,19 @@ service cloud.firestore {
       allow create: if 
         request.resource.data.keys().hasAll(['title', 'description', 'tags', 'author', 'authorId', 'date']) &&
         request.resource.data.title is string &&
-        request.resource.data.description is string;
+        request.resource.data.description is string &&
+        request.resource.data.tags is list &&
+        request.resource.data.tags.size() > 0 &&
+        request.resource.data.tags.size() <= 8;
       
       // いいね・役に立ったカウントの更新は誰でも可能
       // その他の更新は元の作者のIDを維持することを確認
       allow update: if 
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usefulCount', 'likeCount']) ||
-        request.resource.data.authorId == resource.data.authorId;
+        (request.resource.data.authorId == resource.data.authorId &&
+         request.resource.data.tags is list &&
+         request.resource.data.tags.size() > 0 &&
+         request.resource.data.tags.size() <= 8);
       
       // 削除は制限なし（メインDBとの整合性はアプリケーションコードで保証）
       allow delete: if true;
