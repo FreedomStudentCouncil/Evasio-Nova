@@ -116,7 +116,7 @@ export default function Navbar() {
           <div className="border-t border-white/10 my-2 pt-2">
             {user ? (
               <>
-                <NavLink href={`/wiki/user/${user.uid}`} icon={<FiUser />} text={user.displayName || "ユーザー"} mobile />
+                <NavLink href={`/wiki/user?id=${user.uid}`} icon={<FiUser />} text={user.displayName || "ユーザー"} mobile />
                 <div
                   onClick={signOut}
                   className="flex items-center py-2 px-3 rounded-lg hover:bg-white/10 cursor-pointer"
