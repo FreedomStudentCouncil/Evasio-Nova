@@ -1,13 +1,13 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { FiSave, FiX, FiImage, FiArrowLeft, FiTag, FiChevronLeft, FiChevronRight } from "react-icons/fi";
+import { FiSave, FiX, FiImage, FiArrowLeft, FiTag, FiAlertCircle, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "../../../context/AuthContext";
 import ImageUploader from "../../../components/ImageUploader";
-import { createArticle } from "../../../firebase/wiki";
+import { createArticle, getAllTags, updateTags, Tag } from "../../../firebase/wiki";
 import { deleteImage } from "../../../imgbb/api";
 
 // 型定義を追加
@@ -30,6 +30,14 @@ export default function CreateWikiPage() {
   const [showImageUploader, setShowImageUploader] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [filteredTags, setFilteredTags] = useState<Tag[]>([]);
+  const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<{
+    title?: string;
+    content?: string;
+    tags?: string;
+  }>({});
 
   // 認証チェック
   if (!user) {
@@ -57,16 +65,92 @@ export default function CreateWikiPage() {
     );
   }
 
-  // タグ追加処理
+  // 全角文字を考慮した文字数カウント関数
+  const countFullWidthChars = (str: string): number => {
+    return str.split('').reduce((count, char) => {
+      return count + (char.match(/[^\x01-\x7E]/) ? 2 : 1);
+    }, 0);
+  };
+
+  // バリデーション関数
+  const validateForm = (): boolean => {
+    const errors: typeof validationErrors = {};
+    let isValid = true;
+
+    // タイトルのバリデーション
+    if (countFullWidthChars(title) > 30) {
+      errors.title = "タイトルは全角30文字以内で入力してください";
+      isValid = false;
+    }
+
+    // タグのバリデーション
+    if (tags.length === 0) {
+      errors.tags = "少なくとも1つのタグを追加してください";
+      isValid = false;
+    }
+    for (const tag of tags) {
+      if (countFullWidthChars(tag) > 15) {
+        errors.tags = "タグは全角15文字以内で入力してください";
+        isValid = false;
+        break;
+      }
+    }
+
+    // 本文のバリデーション
+    if (countFullWidthChars(content) > 10000) {
+      errors.content = "本文は全角1万文字以内で入力してください";
+      isValid = false;
+    }
+
+    setValidationErrors(errors);
+    return isValid;
+  };
+
+  // タグの取得
+  useEffect(() => {
+    const fetchTags = async () => {
+      const tags = await getAllTags();
+      setAllTags(tags);
+    };
+    fetchTags();
+  }, []);
+
+  // タグ入力時の候補表示
+  useEffect(() => {
+    if (tagInput.trim()) {
+      const filtered = allTags
+        .filter(tag => 
+          tag.name.toLowerCase().includes(tagInput.toLowerCase()) &&
+          !tags.includes(tag.name)
+        )
+        .slice(0, 5);
+      setFilteredTags(filtered);
+      setShowTagSuggestions(true);
+    } else {
+      setFilteredTags([]);
+      setShowTagSuggestions(false);
+    }
+  }, [tagInput, allTags, tags]);
+
+  // タグ追加処理を修正
   const handleAddTag = () => {
     const trimmedTag = tagInput.trim().toLowerCase();
     if (trimmedTag && !tags.includes(trimmedTag) && tags.length < 8) {
+      if (countFullWidthChars(trimmedTag) > 15) {
+        setValidationErrors(prev => ({
+          ...prev,
+          tags: "タグは全角15文字以内で入力してください"
+        }));
+        return;
+      }
       setTags([...tags, trimmedTag]);
       setTagInput("");
+      setShowTagSuggestions(false);
+      setValidationErrors(prev => ({ ...prev, tags: undefined }));
     }
   };
 
-  // タグ削除処理
+  // タグ削除処理を修正
   const handleRemoveTag = (tagToRemove: string) => {
     setTags(tags.filter(tag => tag !== tagToRemove));
   };
@@ -134,18 +218,8 @@ export default function CreateWikiPage() {
   // フォーム送信処理を修正
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) {
-      setError("タイトルを入力してください");
-      return;
-    }
     
-    if (!content.trim()) {
-      setError("本文を入力してください");
-      return;
-    }
-    
-    if (tags.length === 0) {
-      setError("少なくとも1つのタグを追加してください");
+    if (!validateForm()) {
       return;
     }
     
@@ -171,6 +245,7 @@ export default function CreateWikiPage() {
       // Firestoreに保存
       console.log("記事の投稿を開始します...");
       const articleId = await createArticle(articleData);
+      await updateTags(tags);
       console.log("記事の投稿に成功しました。ID:", articleId);
       
       // 投稿完了メッセージをユーザーに表示
@@ -181,7 +256,6 @@ export default function CreateWikiPage() {
     } catch (error) {
       console.error("記事の投稿エラー:", error);
       setError("記事の投稿に失敗しました。もう一度お試しください。");
-      // エラー詳細をコンソールに出力
       if (error instanceof Error) {
         console.error("エラー詳細:", error.message);
       }
@@ -246,6 +320,7 @@ export default function CreateWikiPage() {
                       value={tagInput}
                       onChange={(e) => setTagInput(e.target.value)}
                       onKeyDown={handleTagKeyDown}
+                      onFocus={() => setShowTagSuggestions(true)}
                       placeholder="タグを追加..."
                       className="w-full bg-white/10 border border-white/20 rounded-lg py-2 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
@@ -260,6 +335,24 @@ export default function CreateWikiPage() {
                     追加
                   </motion.button>
                 </div>
+                
+                {/* タグ候補の表示 */}
+                {showTagSuggestions && filteredTags.length > 0 && (
+                  <div className="absolute z-10 w-full bg-slate-800 border border-slate-700 rounded-lg mt-1 shadow-lg">
+                    {filteredTags.map(tag => (
+                      <button
+                        key={tag.name}
+                        onClick={() => {
+                          setTagInput(tag.name);
+                          setShowTagSuggestions(false);
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-slate-700 transition-colors"
+                      >
+                        #{tag.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 
                 {tags.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-3">
@@ -284,6 +377,10 @@ export default function CreateWikiPage() {
                 <p className="text-xs text-slate-400 mt-2">
                   最大8つのタグを追加できます
                 </p>
+                
+                {validationErrors.tags && (
+                  <p className="text-red-400 text-sm mt-1">{validationErrors.tags}</p>
+                )}
               </div>
               
               {/* 画像アップロード */}
@@ -448,6 +545,15 @@ export default function CreateWikiPage() {
                 </p>
               </div>
               
+              {/* タイトルと本文のバリデーションエラー表示を追加 */}
+              {validationErrors.title && (
+                <p className="text-red-400 text-sm mt-1">{validationErrors.title}</p>
+              )}
+              
+              {validationErrors.content && (
+                <p className="text-red-400 text-sm mt-1">{validationErrors.content}</p>
+              )}
+              
               {/* エラーメッセージ */}
               {error && (
                 <div className="mb-6 p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-200">
@@ -460,10 +566,10 @@ export default function CreateWikiPage() {
                 <motion.button
                   type="submit"
                   disabled={isSubmitting}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  className={`flex-1 py-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center
-                    ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  whileHover={isSubmitting ? {} : { scale: 1.03 }}
+                  whileTap={isSubmitting ? {} : { scale: 0.97 }}
+                  className={`flex-1 py-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg font-semibold shadow-lg transition-all duration-300 flex items-center justify-center
+                    ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-xl'}`}
                 >
                   <FiSave className="mr-2" /> {isSubmitting ? '投稿中...' : '記事を投稿する'}
                 </motion.button>
@@ -471,9 +577,11 @@ export default function CreateWikiPage() {
                 <Link href="/wiki" className="flex-1">
                   <motion.button
                     type="button"
-                    whileHover={{ y: -2 }}
-                    whileTap={{ y: 0 }}
-                    className="w-full py-3 bg-white/10 rounded-lg font-semibold hover:bg-white/15 transition-all duration-300"
+                    disabled={isSubmitting}
+                    whileHover={isSubmitting ? {} : { y: -2 }}
+                    whileTap={isSubmitting ? {} : { y: 0 }}
+                    className={`w-full py-3 bg-white/10 rounded-lg font-semibold transition-all duration-300
+                      ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/15'}`}
                   >
                     キャンセル
                   </motion.button>
