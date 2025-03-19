@@ -25,6 +25,7 @@ import {
   incrementReplyLikeCount
 } from "../firebase/wiki";
 import { User } from "firebase/auth";
+import { getUserProfile } from "../firebase/user";
 
 interface WikiCommentsProps {
   articleId: string;
@@ -50,6 +51,7 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
   const [hasMoreReplies, setHasMoreReplies] = useState<{[key: string]: boolean}>({});
   // いいね済みコメントを記録する状態
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
+  const [userProfiles, setUserProfiles] = useState<{[key: string]: { profileImage?: string | null }}>({});
 
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
@@ -311,6 +313,49 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
     return '日付なし';
   };
 
+  // ユーザープロフィールを取得する関数
+  const fetchUserProfile = async (userId: string) => {
+    if (!userId || userProfiles[userId]) return;
+    
+    try {
+      const profile = await getUserProfile(userId);
+      if (profile) {
+        setUserProfiles(prev => ({
+          ...prev,
+          [userId]: profile
+        }));
+      }
+    } catch (error) {
+      console.error("ユーザープロフィールの取得に失敗:", error);
+    }
+  };
+
+  // コメントと返信のユーザープロフィールを取得
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      const userIds = new Set<string>();
+      
+      // コメントのユーザーIDを収集
+      comments.forEach(comment => {
+        if (comment.authorId) userIds.add(comment.authorId);
+      });
+      
+      // 返信のユーザーIDを収集
+      Object.values(commentReplies).forEach(replies => {
+        replies.forEach(reply => {
+          if (reply.authorId) userIds.add(reply.authorId);
+        });
+      });
+      
+      // 各ユーザーのプロフィールを取得
+      for (const userId of userIds) {
+        await fetchUserProfile(userId);
+      }
+    };
+    
+    fetchProfiles();
+  }, [comments, commentReplies]);
+
   return (
     <div className="mt-12 pt-6 border-t border-white/10">
       <h2 className="text-xl font-bold mb-6 flex items-center">
@@ -371,8 +416,16 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
                 {/* コメントヘッダー */}
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex items-center">
-                    <div className="bg-indigo-600/30 rounded-full p-2 mr-3">
-                      <FiUser size={18} />
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden mr-3">
+                      {comment.authorId && userProfiles[comment.authorId]?.profileImage ? (
+                        <img
+                          src={userProfiles[comment.authorId].profileImage || ""}
+                          alt={comment.author || "ユーザー"}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <FiUser size={18} />
+                      )}
                     </div>
                     <div>
                       {comment.authorId ? (
@@ -493,8 +546,16 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
                           <div key={reply.id} className="bg-white/5 rounded-lg p-3">
                             <div className="flex justify-between items-start mb-2">
                               <div className="flex items-center">
-                                <div className="bg-indigo-600/30 rounded-full p-1.5 mr-2">
-                                  <FiUser size={14} />
+                                <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden mr-2">
+                                  {reply.authorId && userProfiles[reply.authorId]?.profileImage ? (
+                                    <img
+                                      src={userProfiles[reply.authorId].profileImage || ""}
+                                      alt={reply.author || "ユーザー"}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <FiUser size={14} />
+                                  )}
                                 </div>
                                 <div>
                                   {reply.authorId ? (

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FiSearch, FiThumbsUp, FiCheckCircle, FiEdit, FiUser } from "react-icons/fi"; // FiBookmarkをFiUserに置き換え
 import { useAuth } from "../../context/AuthContext";
 import { getAllArticles, WikiArticle } from "../../firebase/wiki";
+import { getUserProfile } from "../../firebase/user";
 
 export default function WikiPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -14,7 +15,25 @@ export default function WikiPage() {
   const [wikiArticles, setWikiArticles] = useState<WikiArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [allTags, setAllTags] = useState<string[]>([]);
+  const [userProfiles, setUserProfiles] = useState<{[key: string]: { profileImage?: string | null }}>({});
   
+  // ユーザープロフィールを取得する関数
+  const fetchUserProfile = async (userId: string) => {
+    if (!userId || userProfiles[userId]) return;
+    
+    try {
+      const profile = await getUserProfile(userId);
+      if (profile) {
+        setUserProfiles(prev => ({
+          ...prev,
+          [userId]: profile
+        }));
+      }
+    } catch (error) {
+      console.error("ユーザープロフィールの取得に失敗:", error);
+    }
+  };
+
   // Firestoreからデータを取得
   useEffect(() => {
     const fetchArticles = async () => {
@@ -25,6 +44,12 @@ export default function WikiPage() {
         
         // 全てのタグを抽出して一意の配列にする
         setAllTags(Array.from(new Set(articles.flatMap(article => article.tags || []))));
+
+        // 著者のプロフィールを取得
+        const authorIds = new Set(articles.map(article => article.authorId).filter(Boolean));
+        for (const userId of authorIds) {
+          await fetchUserProfile(userId);
+        }
       } catch (error) {
         console.error("記事の取得エラー:", error);
       } finally {
@@ -205,7 +230,18 @@ export default function WikiPage() {
                     
                     <div className="flex justify-between items-center text-sm text-slate-300">
                       <span className="flex items-center">
-                        <FiUser className="mr-1" /> {article.author} {/* FiBookmarkをFiUserに変更 */}
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden mr-2">
+                          {article.authorId && userProfiles[article.authorId]?.profileImage ? (
+                            <img
+                              src={userProfiles[article.authorId].profileImage || ""}
+                              alt={article.author || "ユーザー"}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <FiUser size={14} />
+                          )}
+                        </div>
+                        {article.author}
                       </span>
                       <span className="text-xs">
                         {typeof article.date === 'string' 
