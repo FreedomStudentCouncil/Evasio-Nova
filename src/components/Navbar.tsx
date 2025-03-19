@@ -39,9 +39,12 @@ export default function Navbar() {
       <div className="container mx-auto px-4 py-3">
         <div className="flex justify-between items-center">
           {/* ロゴ */}
-          <Link href="/">
-            <span className="text-xl font-bold text-white">Evasio-Nova</span>
-          </Link>
+            <Link href="/">
+            <div className="flex items-center">
+              <img src="/favicon.ico" alt="Evasio-Nova Logo" className="h-6 w-6 mr-2" />
+              <span className="text-xl font-bold text-white">Evasio-Nova</span>
+            </div>
+            </Link>
           
           {/* デスクトップメニュー */}
           <div className="hidden md:flex items-center">
