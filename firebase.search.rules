@@ -32,8 +32,8 @@ service cloud.firestore {
     
     // countsコレクションのルール - いいね数と役立った数のキャッシュ
     match /counts/{docId} {
-      allow read: if true;
-      allow write: if true; // すべてのユーザーが更新可能
+      allow read: if true; // 読み取りは誰でも可能
+      allow write: if true; // 書き込みも誰でも可能（アプリケーションコードで制御）
     }
     
     // タグ情報などのメタデータ
