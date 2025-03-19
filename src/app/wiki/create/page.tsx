@@ -566,10 +566,10 @@ export default function CreateWikiPage() {
                 <motion.button
                   type="submit"
                   disabled={isSubmitting}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  className={`flex-1 py-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center
-                    ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  whileHover={isSubmitting ? {} : { scale: 1.03 }}
+                  whileTap={isSubmitting ? {} : { scale: 0.97 }}
+                  className={`flex-1 py-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg font-semibold shadow-lg transition-all duration-300 flex items-center justify-center
+                    ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-xl'}`}
                 >
                   <FiSave className="mr-2" /> {isSubmitting ? '投稿中...' : '記事を投稿する'}
                 </motion.button>
@@ -577,9 +577,11 @@ export default function CreateWikiPage() {
                 <Link href="/wiki" className="flex-1">
                   <motion.button
                     type="button"
-                    whileHover={{ y: -2 }}
-                    whileTap={{ y: 0 }}
-                    className="w-full py-3 bg-white/10 rounded-lg font-semibold hover:bg-white/15 transition-all duration-300"
+                    disabled={isSubmitting}
+                    whileHover={isSubmitting ? {} : { y: -2 }}
+                    whileTap={isSubmitting ? {} : { y: 0 }}
+                    className={`w-full py-3 bg-white/10 rounded-lg font-semibold transition-all duration-300
+                      ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/15'}`}
                   >
                     キャンセル
                   </motion.button>
