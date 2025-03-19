@@ -2,9 +2,12 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { FiSearch, FiThumbsUp, FiCheckCircle, FiEdit, FiUser } from "react-icons/fi"; // FiBookmarkをFiUserに置き換え
+import { FiSearch, FiThumbsUp, FiCheckCircle, FiEdit, FiUser, FiRefreshCw } from "react-icons/fi"; // FiBookmarkをFiUserに置き換え
 import { useAuth } from "../../context/AuthContext";
-import { getAllArticles, WikiArticle } from "../../firebase/wiki";
+import { getAllArticles, WikiArticle, getArticleById, getAllArticleSummaries } from "../../firebase/wiki";
+import { getUserProfile } from "../../firebase/user";
+import { cacheManager } from "../../utils/cacheManager";
+import { ArticleSummary } from "../../types/wiki";
 
 export default function WikiPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -14,17 +17,105 @@ export default function WikiPage() {
   const [wikiArticles, setWikiArticles] = useState<WikiArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [allTags, setAllTags] = useState<string[]>([]);
+  const [userProfiles, setUserProfiles] = useState<{[key: string]: { profileImage?: string | null }}>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const articlesPerPage = 12;
   
+  // ユーザープロフィールを取得する関数
+  const fetchUserProfile = async (userId: string) => {
+    if (!userId || userProfiles[userId]) return;
+    
+    try {
+      // まずキャッシュからプロフィールを取得
+      let profile = await cacheManager.getUserProfile(userId);
+      
+      // キャッシュにない場合はFirestoreから取得
+      if (!profile) {
+        profile = await getUserProfile(userId);
+        if (profile) {
+          // キャッシュに保存
+          await cacheManager.saveUserProfile(profile);
+        }
+      }
+
+      if (profile) {
+        setUserProfiles(prev => ({
+          ...prev,
+          [userId]: profile
+        }));
+      }
+    } catch (error) {
+      console.error("ユーザープロフィールの取得に失敗:", error);
+    }
+  };
+
   // Firestoreからデータを取得
   useEffect(() => {
     const fetchArticles = async () => {
       try {
-        // Firestoreから記事データを取得
-        const articles = await getAllArticles(sortBy);
-        setWikiArticles(articles);
-        
-        // 全てのタグを抽出して一意の配列にする
-        setAllTags(Array.from(new Set(articles.flatMap(article => article.tags || []))));
+        setLoading(true);
+        let articles: WikiArticle[] = [];
+
+        // まずキャッシュからデータを取得
+        try {
+          const cachedSummaries = await cacheManager.getArticleSummaries();
+          if (cachedSummaries.length > 0) {
+            // キャッシュされた記事概要を直接使用
+            articles = cachedSummaries.map(summary => ({
+              id: summary.id,
+              title: summary.title,
+              description: summary.description,
+              content: '', // 記事概要にはcontentは含まれていないので空文字を設定
+              tags: summary.tags,
+              author: summary.author,
+              authorId: summary.authorId,
+              imageUrl: summary.imageUrl,
+              date: summary.date,
+              lastUpdated: summary.lastUpdated,
+              usefulCount: summary.usefulCount,
+              likeCount: summary.likeCount
+            }));
+            setWikiArticles(articles);
+            setAllTags(Array.from(new Set(articles.flatMap(article => article.tags || []))));
+            setLoading(false);
+          }
+        } catch (cacheError) {
+          console.warn("キャッシュの読み込みに失敗:", cacheError);
+        }
+
+        // キャッシュがない場合はsearchDBから取得
+        if (articles.length === 0) {
+          try {
+            const summaries = await getAllArticleSummaries(sortBy);
+            articles = summaries.map(summary => ({
+              id: summary.id,
+              title: summary.title,
+              description: summary.description,
+              content: '', // 記事概要にはcontentは含まれていないので空文字を設定
+              tags: summary.tags,
+              author: summary.author,
+              authorId: summary.authorId,
+              imageUrl: summary.imageUrl,
+              date: summary.date,
+              lastUpdated: summary.lastUpdated,
+              usefulCount: summary.usefulCount,
+              likeCount: summary.likeCount
+            } as WikiArticle));
+            setWikiArticles(articles);
+            setAllTags(Array.from(new Set(articles.flatMap(article => article.tags || []))));
+
+            // キャッシュを更新
+            await cacheManager.saveArticleSummaries(summaries);
+          } catch (searchDbError) {
+            console.error("検索用DBからの記事取得に失敗:", searchDbError);
+          }
+        }
+
+        // 著者のプロフィールを取得（メインDB）
+        const authorIds = new Set(articles.map(article => article.authorId).filter(Boolean));
+        for (const userId of authorIds) {
+          await fetchUserProfile(userId as string);
+        }
       } catch (error) {
         console.error("記事の取得エラー:", error);
       } finally {
@@ -33,7 +124,48 @@ export default function WikiPage() {
     };
     
     fetchArticles();
-  }, [sortBy]); // sortByが変更されたときに再取得
+  }, [sortBy]);
+
+  // キャッシュをクリアして再取得する関数
+  const handleClearCache = async () => {
+    try {
+      setLoading(true);
+      await cacheManager.clearCache();
+      
+      // searchDBから最新のデータを取得
+      const summaries = await getAllArticleSummaries(sortBy);
+      const articles = summaries.map(summary => ({
+        id: summary.id,
+        title: summary.title,
+        description: summary.description,
+        content: '', // 記事概要にはcontentは含まれていないので空文字を設定
+        tags: summary.tags,
+        author: summary.author,
+        authorId: summary.authorId,
+        imageUrl: summary.imageUrl,
+        date: summary.date,
+        lastUpdated: summary.lastUpdated,
+        usefulCount: summary.usefulCount,
+        likeCount: summary.likeCount
+      } as WikiArticle));
+      
+      setWikiArticles(articles);
+      setAllTags(Array.from(new Set(articles.flatMap(article => article.tags || []))));
+      
+      // キャッシュを更新
+      await cacheManager.saveArticleSummaries(summaries);
+
+      // ユーザープロフィールを再取得（メインDB）
+      const authorIds = new Set(articles.map(article => article.authorId).filter(Boolean));
+      for (const userId of authorIds) {
+        await fetchUserProfile(userId as string);
+      }
+    } catch (error) {
+      console.error("キャッシュのクリアに失敗:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
   
   // 検索とフィルター処理
   const filteredArticles = wikiArticles
@@ -60,6 +192,26 @@ export default function WikiPage() {
       }
       return (b[sortBy] || 0) - (a[sortBy] || 0);
     });
+
+  // ページネーション用の記事を取得
+  const paginatedArticles = filteredArticles.slice(
+    (currentPage - 1) * articlesPerPage,
+    currentPage * articlesPerPage
+  );
+
+  // 総ページ数を計算
+  const totalPages = Math.ceil(filteredArticles.length / articlesPerPage);
+
+  // ページ変更時の処理
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // 検索条件が変更されたら1ページ目に戻る
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedTags, sortBy]);
   
   const toggleTag = (tag: string) => {
     if (selectedTags.includes(tag)) {
@@ -176,8 +328,8 @@ export default function WikiPage() {
         </motion.div>
         
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredArticles.length > 0 ? (
-            filteredArticles.map((article, index) => (
+          {paginatedArticles.length > 0 ? (
+            paginatedArticles.map((article, index) => (
               <motion.div
                 key={article.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -205,7 +357,18 @@ export default function WikiPage() {
                     
                     <div className="flex justify-between items-center text-sm text-slate-300">
                       <span className="flex items-center">
-                        <FiUser className="mr-1" /> {article.author} {/* FiBookmarkをFiUserに変更 */}
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden mr-2">
+                          {article.authorId && userProfiles[article.authorId]?.profileImage ? (
+                            <img
+                              src={userProfiles[article.authorId].profileImage || ""}
+                              alt={article.author || "ユーザー"}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <FiUser size={14} />
+                          )}
+                        </div>
+                        {article.author}
                       </span>
                       <span className="text-xs">
                         {typeof article.date === 'string' 
@@ -235,7 +398,56 @@ export default function WikiPage() {
           )}
         </div>
         
-        <div className="mt-12 text-center">
+        {/* ページネーション */}
+        {totalPages > 1 && (
+          <div className="mt-8 flex justify-center gap-2">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className={`px-4 py-2 rounded-lg transition-all duration-300 ${
+                currentPage === 1
+                  ? 'bg-white/5 text-white/30 cursor-not-allowed'
+                  : 'bg-white/10 hover:bg-white/15'
+              }`}
+            >
+              前へ
+            </motion.button>
+            
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <motion.button
+                key={page}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => handlePageChange(page)}
+                className={`px-4 py-2 rounded-lg transition-all duration-300 ${
+                  currentPage === page
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-white/10 hover:bg-white/15'
+                }`}
+              >
+                {page}
+              </motion.button>
+            ))}
+            
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className={`px-4 py-2 rounded-lg transition-all duration-300 ${
+                currentPage === totalPages
+                  ? 'bg-white/5 text-white/30 cursor-not-allowed'
+                  : 'bg-white/10 hover:bg-white/15'
+              }`}
+            >
+              次へ
+            </motion.button>
+          </div>
+        )}
+        
+        <div className="mt-12 text-center flex justify-center gap-4">
           <Link href="/">
             <motion.button
               whileHover={{ scale: 1.05 }}
@@ -245,6 +457,15 @@ export default function WikiPage() {
               ホームに戻る
             </motion.button>
           </Link>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleClearCache}
+            className="bg-purple-500/20 backdrop-blur-md border border-purple-500/40 rounded-lg px-6 py-3 hover:bg-purple-500/30 transition-all duration-300 flex items-center gap-2"
+          >
+            <FiRefreshCw className={loading ? "animate-spin" : ""} />
+            キャッシュを更新
+          </motion.button>
         </div>
       </div>
     </div>

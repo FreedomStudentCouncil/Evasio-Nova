@@ -23,6 +23,7 @@ import {
 } from "../firebase/wiki";
 import { useAuth } from "../context/AuthContext";
 import WikiComments from "./WikiComments";
+import { getUserProfile } from "../firebase/user";
 
 // IDを受け取らないように変更
 export default function WikiArticleContent() {
@@ -35,6 +36,7 @@ export default function WikiArticleContent() {
   const [error, setError] = useState<string | null>(null);
   const [likedByUser, setLikedByUser] = useState(false);
   const [usefulMarkedByUser, setUsefulMarkedByUser] = useState(false);
+  const [authorProfile, setAuthorProfile] = useState<{ profileImage?: string | null } | null>(null);
   
   // ユーザーの評価状態を確認
   useEffect(() => {
@@ -72,6 +74,21 @@ export default function WikiArticleContent() {
     
     fetchArticleData();
   }, [articleId]);
+  
+  // 著者のプロフィール情報を取得
+  useEffect(() => {
+    const fetchAuthorProfile = async () => {
+      if (article?.authorId) {
+        try {
+          const profile = await getUserProfile(article.authorId);
+          setAuthorProfile(profile);
+        } catch (error) {
+          console.error("著者プロフィールの取得に失敗:", error);
+        }
+      }
+    };
+    fetchAuthorProfile();
+  }, [article?.authorId]);
   
   // いいねを追加
   const handleLike = async () => {
@@ -188,7 +205,17 @@ export default function WikiArticleContent() {
         <div className="flex flex-wrap justify-between items-center text-sm text-slate-300 mb-6 gap-y-2">
           <Link href={`/wiki/user?id=${article.authorId}`}>
             <div className="flex items-center hover:text-white transition-colors">
-              <FiUser className="mr-1" />
+              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden mr-2">
+                {authorProfile?.profileImage ? (
+                  <img
+                    src={authorProfile.profileImage}
+                    alt={article.author || "ユーザー"}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <FiUser className="text-lg" />
+                )}
+              </div>
               <span>{article.author || "不明なユーザー"}</span>
             </div>
           </Link>

@@ -3,10 +3,11 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { FiArrowLeft, FiUser, FiCalendar, FiCheckCircle, FiThumbsUp, FiAlertTriangle } from "react-icons/fi";
+import { FiArrowLeft, FiUser, FiCalendar, FiCheckCircle, FiThumbsUp, FiAlertTriangle, FiCamera } from "react-icons/fi";
 import { getUserArticles, WikiArticle } from "../firebase/wiki";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase/config";
+import { updateProfileImage } from "../firebase/user";
 
 export default function UserProfilePageClient() {
   const searchParams = useSearchParams();
@@ -15,6 +16,8 @@ export default function UserProfilePageClient() {
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState<string>("ユーザー");
   const [error, setError] = useState<string | null>(null);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   
   useEffect(() => {
     const fetchUserData = async () => {
@@ -28,6 +31,7 @@ export default function UserProfilePageClient() {
         if (userSnap.exists()) {
           const userData = userSnap.data();
           setUsername(userData.displayName || "匿名ユーザー");
+          setProfileImage(userData.profileImage || null);
         }
         
         // ユーザーの記事一覧を取得
@@ -48,6 +52,27 @@ export default function UserProfilePageClient() {
     fetchUserData();
   }, [userId]);
   
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      await updateProfileImage(userId, file);
+      // 画像を再読み込み
+      const userRef = doc(db, "users", userId);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        setProfileImage(userSnap.data().profileImage);
+      }
+    } catch (error) {
+      console.error("画像アップロードエラー:", error);
+      setError("画像のアップロードに失敗しました。");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white flex justify-center items-center">
@@ -91,8 +116,28 @@ export default function UserProfilePageClient() {
           >
             <div className="p-6 sm:p-8">
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
-                  <FiUser className="text-3xl" />
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden">
+                    {profileImage ? (
+                      <img
+                        src={profileImage}
+                        alt={username}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <FiUser className="text-3xl" />
+                    )}
+                  </div>
+                  <label className="absolute bottom-0 right-0 bg-blue-500 rounded-full p-1.5 cursor-pointer hover:bg-blue-600 transition-colors">
+                    <FiCamera className="text-sm" />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      disabled={isUploading}
+                    />
+                  </label>
                 </div>
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-bold">{username}</h1>
