@@ -23,6 +23,7 @@ export default function CreateWikiPage() {
   
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [description, setDescription] = useState("");  // 追加
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [images, setImages] = useState<StoredImage[]>([]);
@@ -65,21 +66,29 @@ export default function CreateWikiPage() {
     );
   }
 
-  // 全角文字を考慮した文字数カウント関数
+  // 全角文字を考慮した文字数カウント関数を修正
   const countFullWidthChars = (str: string): number => {
-    return str.split('').reduce((count, char) => {
-      return count + (char.match(/[^\x01-\x7E]/) ? 2 : 1);
-    }, 0);
+    let count = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charAt(i);
+      // 全角文字の判定を修正
+      if (char.match(/[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f]/)) {
+        count += 2;
+      } else {
+        count += 1;
+      }
+    }
+    return count;
   };
 
-  // バリデーション関数
+  // バリデーション関数を修正
   const validateForm = (): boolean => {
     const errors: typeof validationErrors = {};
     let isValid = true;
 
     // タイトルのバリデーション
-    if (countFullWidthChars(title) > 30) {
-      errors.title = "タイトルは全角30文字以内で入力してください";
+    if (countFullWidthChars(title) > 80) {  // 全角40文字分 = 80
+      errors.title = "タイトルは全角40文字以内で入力してください";
       isValid = false;
     }
 
@@ -89,7 +98,7 @@ export default function CreateWikiPage() {
       isValid = false;
     }
     for (const tag of tags) {
-      if (countFullWidthChars(tag) > 15) {
+      if (countFullWidthChars(tag) > 30) {
         errors.tags = "タグは全角15文字以内で入力してください";
         isValid = false;
         break;
@@ -215,6 +224,18 @@ export default function CreateWikiPage() {
     }
   };
 
+  // タイトル入力時のエラークリア処理を追加
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTitle(e.target.value);
+    setValidationErrors(prev => ({ ...prev, title: undefined }));
+  };
+
+  // 本文入力時のエラークリア処理を追加
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setContent(e.target.value);
+    setValidationErrors(prev => ({ ...prev, content: undefined }));
+  };
+
   // フォーム送信処理を修正
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -230,7 +251,7 @@ export default function CreateWikiPage() {
       const articleData = {
         title,
         content,
-        description: content.substring(0, 150) + (content.length > 150 ? '...' : ''),
+        description: description || content.substring(0, 150) + (content.length > 150 ? '...' : ''),  // descriptionを追加
         tags,
         author: user.displayName || "匿名ユーザー",
         authorId: user.uid,
@@ -299,13 +320,31 @@ export default function CreateWikiPage() {
                   id="title"
                   type="text"
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={handleTitleChange}  // 変更
                   placeholder="記事のタイトルを入力..."
                   className="w-full bg-white/10 border border-white/20 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   required
                 />
               </div>
               
+              {/* 概要を追加 */}
+              <div className="mb-6">
+                <label htmlFor="description" className="block text-sm font-medium mb-2">
+                  概要（任意）
+                </label>
+                <input
+                  id="description"
+                  type="text"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="記事の簡単な説明..."
+                  className="w-full bg-white/10 border border-white/20 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  入力しない場合は本文の先頭から自動生成されます
+                </p>
+              </div>
+
               {/* タグ */}
               <div className="mb-6">
                 <label htmlFor="tags" className="block text-sm font-medium mb-2">
@@ -534,7 +573,7 @@ export default function CreateWikiPage() {
                 <textarea
                   id="content"
                   value={content}
-                  onChange={(e) => setContent(e.target.value)}
+                  onChange={handleContentChange}  // 変更
                   placeholder="記事の本文をここに入力..."
                   rows={10}
                   className="w-full bg-white/10 border border-white/20 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-purple-500"

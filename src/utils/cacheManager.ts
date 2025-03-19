@@ -7,6 +7,12 @@ const USER_STORE_NAME = 'userProfiles';
 const COUNTS_STORE_NAME = 'articleCounts'; // 新しいストア名を追加
 const CACHE_VERSION = 3; // バージョン更新
 
+// カスタム有効期限の設定を追加
+const CACHE_EXPIRY = {
+  ARTICLE_SUMMARIES: 4 * 60 * 60 * 1000,  // 4時間（ミリ秒）
+  ARTICLE_COUNTS: 12 * 60 * 60 * 1000     // 12時間（ミリ秒）
+};
+
 // カウントデータの型定義
 export interface ArticleCounts {
   id: string; // ドキュメントID (常に "article")
@@ -54,7 +60,14 @@ export class CacheManager {
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(STORE_NAME, 'readwrite');
       const store = transaction.objectStore(STORE_NAME);
-      const requests = summaries.map(summary => store.put(summary));
+      
+      // タイムスタンプを追加
+      const summariesWithTimestamp = summaries.map(summary => ({
+        ...summary,
+        lastUpdated: Date.now()
+      }));
+      
+      const requests = summariesWithTimestamp.map(summary => store.put(summary));
 
       Promise.all(requests.map(req => 
         new Promise<void>((resolve, reject) => {
@@ -76,7 +89,15 @@ export class CacheManager {
       const store = transaction.objectStore(STORE_NAME);
       const request = store.getAll();
 
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => {
+        const summaries = request.result;
+        if (summaries && summaries.length > 0 && 
+            this.isArticleSummariesValid(summaries[0].lastUpdated)) {
+          resolve(summaries);
+        } else {
+          resolve([]);  // キャッシュが無効な場合は空配列を返す
+        }
+      };
       request.onerror = () => reject(request.error);
     });
   }
@@ -187,13 +208,18 @@ export class CacheManager {
     }
   }
 
-  // キャッシュの有効性を確認（12時間以内）
+  // キャッシュの有効性を確認
   private isCountCacheValid(counts: ArticleCounts): boolean {
     const now = Date.now();
     const cacheAge = now - counts.lastUpdated;
-    const maxCacheAge = 12 * 60 * 60 * 1000; // 12時間（ミリ秒）
-    
-    return cacheAge < maxCacheAge;
+    return cacheAge < CACHE_EXPIRY.ARTICLE_COUNTS;
+  }
+
+  // 記事概要キャッシュの有効性を確認（4時間以内）
+  private isArticleSummariesValid(timestamp: number): boolean {
+    const now = Date.now();
+    const cacheAge = now - timestamp;
+    return cacheAge < CACHE_EXPIRY.ARTICLE_SUMMARIES;
   }
 
   async clearCache(): Promise<void> {

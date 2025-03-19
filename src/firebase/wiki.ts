@@ -389,6 +389,11 @@ export async function getUserArticles(authorId: string): Promise<WikiArticle[]> 
  */
 export async function incrementUsefulCount(id: string): Promise<void> {
   try {
+    // 記事の著者IDを取得
+    const article = await getArticleById(id);
+    if (!article?.authorId) throw new Error('Article or author not found');
+    const authorId = article.authorId;
+
     // 検索用DBの記事概要を更新
     const articleSummaryRef = doc(searchDb, 'articleSummaries', id);
     await updateDoc(articleSummaryRef, {
@@ -397,10 +402,15 @@ export async function incrementUsefulCount(id: string): Promise<void> {
     
     // 検索用DBのcountsコレクションを更新
     const countsRef = doc(searchDb, 'counts', 'article');
+    const authorCountsRef = doc(searchDb, 'counts', 'author');
     
     // 先に現在のカウントドキュメントを取得
-    const countsDoc = await getDoc(countsRef);
-    
+    const [countsDoc, authorCountsDoc] = await Promise.all([
+      getDoc(countsRef),
+      getDoc(authorCountsRef)
+    ]);
+
+    // 記事ごとのカウント更新
     if (countsDoc.exists()) {
       // 既存のデータを更新
       const countsData = countsDoc.data();
@@ -432,6 +442,30 @@ export async function incrementUsefulCount(id: string): Promise<void> {
         lastUpdated: Date.now() // キャッシュ有効期限の起点
       });
     }
+
+    // 著者ごとのカウント更新
+    if (authorCountsDoc.exists()) {
+      const authorData = authorCountsDoc.data();
+      const authorCounts = authorData.counts || {};
+      const currentAuthorCount = authorCounts[authorId] || { likeCount: 0, usefulCount: 0 };
+
+      authorCounts[authorId] = {
+        ...currentAuthorCount,
+        usefulCount: currentAuthorCount.usefulCount + 1
+      };
+
+      await setDoc(authorCountsRef, {
+        counts: authorCounts,
+        lastUpdated: Date.now()
+      }, { merge: true });
+    } else {
+      await setDoc(authorCountsRef, {
+        counts: {
+          [authorId]: { likeCount: 0, usefulCount: 1 }
+        },
+        lastUpdated: Date.now()
+      });
+    }
   } catch (error) {
     console.error('役に立ったカウント更新エラー:', error);
     throw error;
@@ -444,6 +478,11 @@ export async function incrementUsefulCount(id: string): Promise<void> {
  */
 export async function incrementLikeCount(id: string): Promise<void> {
   try {
+    // 記事の著者IDを取得
+    const article = await getArticleById(id);
+    if (!article?.authorId) throw new Error('Article or author not found');
+    const authorId = article.authorId;
+
     // 検索用DBの記事概要を更新
     const articleSummaryRef = doc(searchDb, 'articleSummaries', id);
     await updateDoc(articleSummaryRef, {
@@ -452,10 +491,15 @@ export async function incrementLikeCount(id: string): Promise<void> {
     
     // 検索用DBのcountsコレクションを更新
     const countsRef = doc(searchDb, 'counts', 'article');
+    const authorCountsRef = doc(searchDb, 'counts', 'author');
     
     // 先に現在のカウントドキュメントを取得
-    const countsDoc = await getDoc(countsRef);
-    
+    const [countsDoc, authorCountsDoc] = await Promise.all([
+      getDoc(countsRef),
+      getDoc(authorCountsRef)
+    ]);
+
+    // 記事ごとのカウント更新
     if (countsDoc.exists()) {
       // 既存のデータを更新
       const countsData = countsDoc.data();
@@ -485,6 +529,30 @@ export async function incrementLikeCount(id: string): Promise<void> {
           } 
         },
         lastUpdated: Date.now() // キャッシュ有効期限の起点
+      });
+    }
+
+    // 著者ごとのカウント更新
+    if (authorCountsDoc.exists()) {
+      const authorData = authorCountsDoc.data();
+      const authorCounts = authorData.counts || {};
+      const currentAuthorCount = authorCounts[authorId] || { likeCount: 0, usefulCount: 0 };
+
+      authorCounts[authorId] = {
+        ...currentAuthorCount,
+        likeCount: currentAuthorCount.likeCount + 1
+      };
+
+      await setDoc(authorCountsRef, {
+        counts: authorCounts,
+        lastUpdated: Date.now()
+      }, { merge: true });
+    } else {
+      await setDoc(authorCountsRef, {
+        counts: {
+          [authorId]: { likeCount: 1, usefulCount: 0 }
+        },
+        lastUpdated: Date.now()
       });
     }
   } catch (error) {
@@ -816,6 +884,39 @@ export async function getArticleCountById(articleId: string): Promise<{ likeCoun
     return { likeCount: 0, usefulCount: 0 };
   } catch (error) {
     console.error('記事カウント情報の取得に失敗:', error);
+    return { likeCount: 0, usefulCount: 0 };
+  }
+}
+
+// 新しい関数: 著者のカウント情報を取得
+export async function getAuthorCounts(): Promise<{ [authorId: string]: { likeCount: number; usefulCount: number } }> {
+  try {
+    const authorCountsRef = doc(searchDb, 'counts', 'author');
+    const countsDoc = await getDoc(authorCountsRef);
+
+    if (countsDoc.exists()) {
+      return countsDoc.data().counts || {};
+    }
+    return {};
+  } catch (error) {
+    console.error('著者カウント情報の取得に失敗:', error);
+    return {};
+  }
+}
+
+// 新しい関数: 特定の著者のカウント情報を取得
+export async function getAuthorCountById(authorId: string): Promise<{ likeCount: number; usefulCount: number }> {
+  try {
+    const authorCountsRef = doc(searchDb, 'counts', 'author');
+    const countsDoc = await getDoc(authorCountsRef);
+
+    if (countsDoc.exists()) {
+      const data = countsDoc.data();
+      return data.counts?.[authorId] || { likeCount: 0, usefulCount: 0 };
+    }
+    return { likeCount: 0, usefulCount: 0 };
+  } catch (error) {
+    console.error('著者カウント情報の取得に失敗:', error);
     return { likeCount: 0, usefulCount: 0 };
   }
 }

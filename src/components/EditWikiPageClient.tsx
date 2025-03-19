@@ -45,11 +45,19 @@ export default function EditWikiPageClient() {
     tags?: string;
   }>({});
 
-  // 全角文字を考慮した文字数カウント関数
+  // 全角文字を考慮した文字数カウント関数を修正
   const countFullWidthChars = (str: string): number => {
-    return str.split('').reduce((count, char) => {
-      return count + (char.match(/[^\x01-\x7E]/) ? 2 : 1);
-    }, 0);
+    let count = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charAt(i);
+      // 全角文字の判定を修正
+      if (char.match(/[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f]/)) {
+        count += 2;
+      } else {
+        count += 1;
+      }
+    }
+    return count;
   };
 
   // バリデーション関数
@@ -58,7 +66,7 @@ export default function EditWikiPageClient() {
     let isValid = true;
 
     // タイトルのバリデーション
-    if (countFullWidthChars(title) > 30) {
+    if (countFullWidthChars(title) > 80) {
       errors.title = "タイトルは全角30文字以内で入力してください";
       isValid = false;
     }
@@ -69,7 +77,7 @@ export default function EditWikiPageClient() {
       isValid = false;
     }
     for (const tag of tags) {
-      if (countFullWidthChars(tag) > 15) {
+      if (countFullWidthChars(tag) > 30) {
         errors.tags = "タグは全角15文字以内で入力してください";
         isValid = false;
         break;
