@@ -46,6 +46,15 @@ const storage = getStorage(mainApp); // ストレージ初期化を復元
 const auth = getAuth(mainApp);
 
 // 検索用アプリのサービス初期化
-const searchDb: Firestore = getFirestore(searchApp);
+let _searchDb: Firestore | null = null;
+
+export function getSearchDb(): Firestore {
+  if (!_searchDb) {
+    _searchDb = getFirestore(searchApp);
+  }
+  return _searchDb;
+}
+
+const searchDb: Firestore = getSearchDb();
 
 export { mainApp, searchApp, db, searchDb, storage, auth };

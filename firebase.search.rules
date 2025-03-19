@@ -30,6 +30,12 @@ service cloud.firestore {
       allow delete: if true;
     }
     
+    // countsコレクションのルール - いいね数と役立った数のキャッシュ
+    match /counts/{docId} {
+      allow read: if true;
+      allow write: if true; // すべてのユーザーが更新可能
+    }
+    
     // タグ情報などのメタデータ
     match /tags/{tagId} {
       allow read: if true;  // タグ情報は誰でも読み取り可能

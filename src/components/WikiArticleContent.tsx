@@ -19,11 +19,13 @@ import {
   getArticleById, 
   incrementLikeCount, 
   incrementUsefulCount, 
-  WikiArticle
+  WikiArticle,
+  getArticleCountById // 新しい関数をインポート
 } from "../firebase/wiki";
 import { useAuth } from "../context/AuthContext";
 import WikiComments from "./WikiComments";
 import { getUserProfile } from "../firebase/user";
+import { cacheManager } from "../utils/cacheManager"; // キャッシュマネージャーをインポート
 
 // IDを受け取らないように変更
 export default function WikiArticleContent() {
@@ -37,6 +39,7 @@ export default function WikiArticleContent() {
   const [likedByUser, setLikedByUser] = useState(false);
   const [usefulMarkedByUser, setUsefulMarkedByUser] = useState(false);
   const [authorProfile, setAuthorProfile] = useState<{ profileImage?: string | null } | null>(null);
+  const [counts, setCounts] = useState<{ likeCount: number; usefulCount: number }>({ likeCount: 0, usefulCount: 0 });
   
   // ユーザーの評価状態を確認
   useEffect(() => {
@@ -58,11 +61,23 @@ export default function WikiArticleContent() {
       }
       
       try {
+        // 記事本体を取得
         const articleData = await getArticleById(articleId);
         if (!articleData) {
           setError("記事が見つかりませんでした");
         } else {
           setArticle(articleData);
+          
+          // 必ず最新のカウント情報を取得（キャッシュを使わない）
+          const latestCounts = await getArticleCountById(articleId);
+          setCounts(latestCounts);
+          
+          // 記事を開いたら、IndexedDBのキャッシュも更新
+          await cacheManager.updateArticleCount(
+            articleId,
+            latestCounts.likeCount,
+            latestCounts.usefulCount
+          );
         }
       } catch (err) {
         console.error("記事の取得に失敗しました:", err);
@@ -105,10 +120,18 @@ export default function WikiArticleContent() {
       
       // 状態を更新
       setLikedByUser(true);
-      setArticle(prev => prev ? {
+      setCounts(prev => ({
         ...prev,
-        likeCount: (prev.likeCount || 0) + 1
-      } : null);
+        likeCount: prev.likeCount + 1
+      }));
+      
+      // この記事のキャッシュも即時更新
+      const newLikeCount = counts.likeCount + 1;
+      await cacheManager.updateArticleCount(
+        articleId,
+        newLikeCount,
+        counts.usefulCount
+      );
       
     } catch (err) {
       console.error("いいねの追加に失敗しました:", err);
@@ -130,10 +153,18 @@ export default function WikiArticleContent() {
       
       // 状態を更新
       setUsefulMarkedByUser(true);
-      setArticle(prev => prev ? {
+      setCounts(prev => ({
         ...prev,
-        usefulCount: (prev.usefulCount || 0) + 1
-      } : null);
+        usefulCount: prev.usefulCount + 1
+      }));
+      
+      // この記事のキャッシュも即時更新
+      const newUsefulCount = counts.usefulCount + 1;
+      await cacheManager.updateArticleCount(
+        articleId,
+        counts.likeCount,
+        newUsefulCount
+      );
       
     } catch (err) {
       console.error("役に立ったの追加に失敗しました:", err);
@@ -293,7 +324,7 @@ export default function WikiArticleContent() {
                 <FiCheckCircle />
                 <span>使えた！</span>
                 <span className="bg-white/10 px-2 py-0.5 rounded-full text-sm">
-                  {article.usefulCount || 0}
+                  {counts.usefulCount || 0}
                 </span>
               </motion.div>
             </button>
@@ -317,7 +348,7 @@ export default function WikiArticleContent() {
                 <FiThumbsUp />
                 <span>いいね</span>
                 <span className="bg-white/10 px-2 py-0.5 rounded-full text-sm">
-                  {article.likeCount || 0}
+                  {counts.likeCount || 0}
                 </span>
               </motion.div>
             </button>

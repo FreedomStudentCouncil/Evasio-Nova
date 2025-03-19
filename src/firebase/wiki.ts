@@ -15,9 +15,10 @@ import {
   limit,
   startAfter,
   FieldValue,
-  setDoc
+  setDoc,
+  getFirestore
 } from 'firebase/firestore';
-import { db, searchDb } from './config';
+import { db, searchDb, getSearchDb } from './config';
 
 // Wiki記事の型定義 - メインDBに保存する完全な記事情報
 export interface WikiArticle {
@@ -388,13 +389,51 @@ export async function getUserArticles(authorId: string): Promise<WikiArticle[]> 
  */
 export async function incrementUsefulCount(id: string): Promise<void> {
   try {
-    // 検索用DBの記事概要のみ更新
-    const summaryRef = doc(searchDb, 'articleSummaries', id);
-    await updateDoc(summaryRef, {
+    // 検索用DBの記事概要を更新
+    const articleSummaryRef = doc(searchDb, 'articleSummaries', id);
+    await updateDoc(articleSummaryRef, {
       usefulCount: increment(1)
     });
+    
+    // 検索用DBのcountsコレクションを更新
+    const countsRef = doc(searchDb, 'counts', 'article');
+    
+    // 先に現在のカウントドキュメントを取得
+    const countsDoc = await getDoc(countsRef);
+    
+    if (countsDoc.exists()) {
+      // 既存のデータを更新
+      const countsData = countsDoc.data();
+      const currentCounts = countsData.counts || {};
+      const articleCounts = currentCounts[id] || { likeCount: 0, usefulCount: 0 };
+      
+      currentCounts[id] = {
+        ...articleCounts,
+        usefulCount: articleCounts.usefulCount + 1
+      };
+      
+      await setDoc(countsRef, { 
+        counts: currentCounts,
+        lastUpdated: Date.now() // キャッシュ有効期限の起点
+      }, { merge: true });
+    } else {
+      // 新規作成
+      const articleData = await getArticleById(id);
+      const newCount = articleData?.usefulCount ? (articleData.usefulCount + 1) : 1;
+      const likeCount = articleData?.likeCount || 0;
+      
+      await setDoc(countsRef, { 
+        counts: { 
+          [id]: { 
+            likeCount, 
+            usefulCount: newCount 
+          } 
+        },
+        lastUpdated: Date.now() // キャッシュ有効期限の起点
+      });
+    }
   } catch (error) {
-    console.error('「使えた！」カウント更新エラー:', error);
+    console.error('役に立ったカウント更新エラー:', error);
     throw error;
   }
 }
@@ -405,13 +444,51 @@ export async function incrementUsefulCount(id: string): Promise<void> {
  */
 export async function incrementLikeCount(id: string): Promise<void> {
   try {
-    // 検索用DBの記事概要のみ更新
-    const summaryRef = doc(searchDb, 'articleSummaries', id);
-    await updateDoc(summaryRef, {
+    // 検索用DBの記事概要を更新
+    const articleSummaryRef = doc(searchDb, 'articleSummaries', id);
+    await updateDoc(articleSummaryRef, {
       likeCount: increment(1)
     });
+    
+    // 検索用DBのcountsコレクションを更新
+    const countsRef = doc(searchDb, 'counts', 'article');
+    
+    // 先に現在のカウントドキュメントを取得
+    const countsDoc = await getDoc(countsRef);
+    
+    if (countsDoc.exists()) {
+      // 既存のデータを更新
+      const countsData = countsDoc.data();
+      const currentCounts = countsData.counts || {};
+      const articleCounts = currentCounts[id] || { likeCount: 0, usefulCount: 0 };
+      
+      currentCounts[id] = {
+        ...articleCounts,
+        likeCount: articleCounts.likeCount + 1
+      };
+      
+      await setDoc(countsRef, { 
+        counts: currentCounts,
+        lastUpdated: Date.now() // キャッシュ有効期限の起点
+      }, { merge: true });
+    } else {
+      // 新規作成
+      const articleData = await getArticleById(id);
+      const newCount = articleData?.likeCount ? (articleData.likeCount + 1) : 1;
+      const usefulCount = articleData?.usefulCount || 0;
+      
+      await setDoc(countsRef, { 
+        counts: { 
+          [id]: { 
+            likeCount: newCount, 
+            usefulCount 
+          } 
+        },
+        lastUpdated: Date.now() // キャッシュ有効期限の起点
+      });
+    }
   } catch (error) {
-    console.error('「いいね」カウント更新エラー:', error);
+    console.error('いいねカウント更新エラー:', error);
     throw error;
   }
 }
@@ -700,5 +777,45 @@ export async function decrementTags(tagNames: string[]): Promise<void> {
   } catch (error) {
     console.error('タグ更新エラー:', error);
     throw error;
+  }
+}
+
+// カウント情報を取得する関数を追加
+export async function getArticleCounts(): Promise<{ [articleId: string]: { likeCount: number; usefulCount: number } }> {
+  try {
+    const countsRef = doc(searchDb, 'counts', 'article');
+    const countsDoc = await getDoc(countsRef);
+
+    if (countsDoc.exists()) {
+      return countsDoc.data().counts || {};
+    }
+    return {};
+  } catch (error) {
+    console.error('カウント情報の取得に失敗:', error);
+    return {};
+  }
+}
+
+// 特定の記事のカウント情報を取得（キャッシュを使わない、常に最新）
+export async function getArticleCountById(articleId: string): Promise<{ likeCount: number; usefulCount: number }> {
+  try {
+    // 記事概要からカウントを取得（最も信頼性の高いソース）
+    const articleSummaryRef = doc(searchDb, 'articleSummaries', articleId);
+    const summaryDoc = await getDoc(articleSummaryRef);
+    
+    if (summaryDoc.exists()) {
+      const data = summaryDoc.data();
+      return {
+        likeCount: data.likeCount || 0,
+        usefulCount: data.usefulCount || 0
+      };
+    }
+    
+    // 記事概要がない場合、エラー処理
+    console.warn('記事概要が見つかりません:', articleId);
+    return { likeCount: 0, usefulCount: 0 };
+  } catch (error) {
+    console.error('記事カウント情報の取得に失敗:', error);
+    return { likeCount: 0, usefulCount: 0 };
   }
 }
