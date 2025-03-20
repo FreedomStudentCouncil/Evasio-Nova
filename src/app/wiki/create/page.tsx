@@ -10,6 +10,7 @@ import ImageUploader from "../../../components/ImageUploader";
 import MarkdownPreview from "../../../components/MarkdownPreview";
 import { createArticle, getAllTags, updateTags, Tag } from "../../../firebase/wiki";
 import { deleteImage } from "../../../imgbb/api";
+import MarkdownToolbar from "../../../components/MarkdownToolbar";
 
 // 型定義を追加
 interface StoredImage {
@@ -236,6 +237,21 @@ export default function CreateWikiPage() {
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value);
     setValidationErrors(prev => ({ ...prev, content: undefined }));
+  };
+
+  // テキストエリアへの挿入を処理する関数を追加
+  const handleInsert = (markdown: string) => {
+    const textarea = document.getElementById('content') as HTMLTextAreaElement;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = textarea.value;
+      const newText = text.substring(0, start) + markdown + text.substring(end);
+      setContent(newText);
+      // カーソル位置を更新
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = start + markdown.length;
+    }
   };
 
   // フォーム送信処理を修正
@@ -602,15 +618,22 @@ export default function CreateWikiPage() {
                 {/* エディタとプレビューの切り替え */}
                 <div className="rounded-lg border border-white/20 bg-white/10">
                   {editorMode === 'raw' ? (
-                    <textarea
-                      id="content"
-                      value={content}
-                      onChange={handleContentChange}
-                      placeholder="記事の本文をここに入力..."
-                      rows={15}
-                      className="w-full bg-transparent rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      required
-                    />
+                    <>
+                      <MarkdownToolbar 
+                        onInsert={handleInsert} 
+                        onImageClick={() => setShowImageUploader(true)}
+                        className="border-b border-white/20" 
+                      />
+                      <textarea
+                        id="content"
+                        value={content}
+                        onChange={handleContentChange}
+                        placeholder="記事の本文をここに入力..."
+                        rows={15}
+                        className="w-full bg-transparent rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        required
+                      />
+                    </>
                   ) : (
                     <div className="p-4 min-h-[300px] max-h-[600px] overflow-y-auto">
                       {content ? (
