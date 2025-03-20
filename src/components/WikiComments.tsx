@@ -26,13 +26,16 @@ import {
 } from "../firebase/wiki";
 import { User } from "firebase/auth";
 import { getUserProfile } from "../firebase/user";
+import { addNotification } from "../firebase/notification";
 
 interface WikiCommentsProps {
   articleId: string;
   user: User | null;
+  articleTitle: string;  // 記事のタイトルを追加
+  articleAuthorId: string;  // 記事の著者IDを追加
 }
 
-export default function WikiComments({ articleId, user }: WikiCommentsProps) {
+export default function WikiComments({ articleId, user, articleTitle, articleAuthorId }: WikiCommentsProps) {
   // コメント状態管理
   const [comments, setComments] = useState<WikiComment[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
@@ -150,7 +153,7 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
     setCommentError(null);
     
     try {
-      await addComment(
+      const commentId = await addComment(
         articleId,
         {
           content: commentText.trim(),
@@ -160,7 +163,19 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
         }
       );
       
-      // コメント入力をクリアして最新のコメントを再取得
+      // 記事の著者に通知を送信（自分の記事へのコメントは通知しない）
+      if (user && articleAuthorId && user.uid !== articleAuthorId) {
+        await addNotification({
+          userId: articleAuthorId,
+          type: 'comment',
+          articleId,
+          articleTitle,
+          senderId: user.uid,
+          senderName: user.displayName || "匿名ユーザー",
+          content: commentText.trim()
+        });
+      }
+      
       setCommentText("");
       fetchComments(true);
       
@@ -179,7 +194,7 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
     setSubmittingComment(true);
     
     try {
-      await addReply(
+      const replyId = await addReply(
         articleId,
         parentId,
         {
@@ -189,22 +204,31 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
           date: serverTimestamp()
         }
       );
+
+      // 記事の著者に通知を送信（自分の記事への返信は通知しない）
+      if (user && articleAuthorId && user.uid !== articleAuthorId) {
+        await addNotification({
+          userId: articleAuthorId,
+          type: 'reply',
+          articleId,
+          articleTitle,
+          senderId: user.uid,
+          senderName: user.displayName || "匿名ユーザー",
+          content: replyText.trim()
+        });
+      }
       
-      // 返信入力をクリアするが、返信フォームは閉じない
       setReplyText("");
       
-      // コメントの返信カウント表示を更新
       setComments(prev => prev.map(comment => 
         comment.id === parentId ? 
         { ...comment, replyCount: (comment.replyCount || 0) + 1 } : 
         comment
       ));
       
-      // 既に展開している場合は返信を再取得
       if (parentId && expandedComments.has(parentId)) {
         fetchReplies(parentId, true);
       } else {
-        // 返信が展開されていなければ展開する
         toggleComment(parentId);
       }
       
