@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import { loginWithEmail, registerWithEmail } from "../../firebase/auth";
+import TermsDialog from "../../components/TermsDialog";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -17,13 +18,20 @@ export default function LoginPage() {
   const { signInWithGoogle } = useAuth();
   const router = useRouter();
   const [redirecting, setRedirecting] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   // 標準ログイン処理
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setIsLoading(true);
 
+    if (isSignUp && !termsAccepted) {
+      setShowTerms(true);
+      return;
+    }
+
+    setIsLoading(true);
     try {
       if (isSignUp) {
         // 新規登録
@@ -39,6 +47,11 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleTermsAccept = async () => {
+    setTermsAccepted(true);
+    await handleEmailAuth({ preventDefault: () => {} } as React.FormEvent);
   };
 
   // エラーハンドリング
@@ -105,6 +118,11 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white flex items-center justify-center p-4">
+      <TermsDialog
+        isOpen={showTerms}
+        onClose={() => setShowTerms(false)}
+        onAccept={handleTermsAccept}
+      />
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
