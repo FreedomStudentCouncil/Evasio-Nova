@@ -10,6 +10,7 @@ import ImageUploader from "./ImageUploader";
 import MarkdownPreview from "./MarkdownPreview";
 import { getArticleById, updateArticle, WikiArticle, getAllTags, updateTags, decrementTags, Tag } from "../firebase/wiki";
 import { deleteImage } from "../imgbb/api";
+import MarkdownToolbar from "./MarkdownToolbar";
 
 // 型定義を追加
 interface StoredImage {
@@ -272,11 +273,33 @@ export default function EditWikiPageClient() {
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
       const text = textarea.value;
-      const newText = text.substring(0, start) + markdown + text.substring(end);
+      
+      // 選択テキストがある場合は、それを活かしてマークダウンを挿入
+      const selectedText = text.substring(start, end);
+      let insertText = markdown;
+      
+      if (selectedText) {
+        // マークダウンパターンに応じて選択テキストを適切に挿入
+        if (markdown.includes('**')) {
+          insertText = `**${selectedText}**`;
+        } else if (markdown.includes('*')) {
+          insertText = `*${selectedText}*`;
+        } else if (markdown.includes('[')) {
+          insertText = `[${selectedText}](URL)`;
+        } else if (markdown.includes('```')) {
+          insertText = `\`\`\`\n${selectedText}\n\`\`\``;
+        } else {
+          insertText = markdown + selectedText;
+        }
+      }
+      
+      const newText = text.substring(0, start) + insertText + text.substring(end);
       setContent(newText);
+      
       // カーソル位置を更新
       textarea.focus();
-      textarea.selectionStart = textarea.selectionEnd = start + markdown.length;
+      const newCursorPos = start + insertText.length;
+      textarea.selectionStart = textarea.selectionEnd = newCursorPos;
     }
   };
 
@@ -719,6 +742,12 @@ export default function EditWikiPageClient() {
                 
                 {/* エディタとプレビューの切り替え */}
                 <div className="rounded-lg border border-white/20 bg-white/10">
+                  {editorMode === 'raw' && (
+                    <MarkdownToolbar 
+                      onInsert={handleInsertMarkdown}
+                      onImageClick={() => setShowImageUploader(true)}
+                    />
+                  )}
                   {editorMode === 'raw' ? (
                     <textarea
                       id="content"
