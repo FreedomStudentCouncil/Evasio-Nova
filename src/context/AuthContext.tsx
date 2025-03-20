@@ -1,11 +1,12 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, loginWithGoogle, logout, getRedirectResult } from '../firebase/auth';
+import { auth, loginWithGoogle, logout, getRedirectResult, isAdmin } from '../firebase/auth';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  isAdmin: boolean; // 管理者かどうかのフラグを追加
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -15,6 +16,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isUserAdmin, setIsUserAdmin] = useState(false); // 管理者状態を追加
 
   // リダイレクト認証結果の処理とユーザー状態監視
   useEffect(() => {
@@ -29,6 +31,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // 認証状態変更リスナーを設定
       const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
         setUser(currentUser);
+        // ユーザーのメールアドレスを使って管理者かどうかを判定
+        setIsUserAdmin(currentUser ? isAdmin(currentUser.email) : false);
         setLoading(false);
       });
 
@@ -59,6 +63,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const value = {
     user,
     loading,
+    isAdmin: isUserAdmin, // 管理者フラグを提供
     signInWithGoogle,
     signOut
   };
