@@ -165,7 +165,14 @@ export async function logout(): Promise<void> {
  */
 export async function resetPassword(email: string): Promise<void> {
   try {
-    await sendPasswordResetEmail(auth, email);
+    const actionCodeSettings = {
+      url: process.env.NEXT_PUBLIC_APP_URL ? 
+        `${process.env.NEXT_PUBLIC_APP_URL}/login` : 
+        'http://localhost:3000/login',
+      handleCodeInApp: false
+    };
+    
+    await sendPasswordResetEmail(auth, email, actionCodeSettings);
   } catch (error) {
     console.error('パスワードリセットエラー:', error);
     throw error;
