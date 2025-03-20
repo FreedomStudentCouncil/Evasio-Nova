@@ -27,7 +27,9 @@ export default function NotificationsPage() {
 
     const fetchNotifications = async () => {
       try {
-        const { notifications } = await getUserNotifications(user.uid);
+        console.log('通知を取得中...');
+        const { notifications, unreadCount } = await getUserNotifications(user.uid);
+        console.log(`取得完了: ${notifications.length}件、未読: ${unreadCount}件`);
         setNotifications(notifications);
       } catch (error) {
         console.error('通知の取得に失敗:', error);

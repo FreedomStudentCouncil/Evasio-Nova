@@ -41,6 +41,7 @@ export default function WikiArticleContent() {
   
   const { user, isAdmin } = useAuth(); // isAdminを追加
   const [article, setArticle] = useState<WikiArticle | null>(null);
+  //console.log(article);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [likedByUser, setLikedByUser] = useState(false);
@@ -529,7 +530,7 @@ export default function WikiArticleContent() {
         </div>
         
         {/* コメントセクション */}
-        <WikiComments articleId={articleId} user={user} />
+        <WikiComments articleId={articleId} user={user} articleTitle={article.title} articleAuthorId={article.authorId} />
       </div>
     </motion.div>
   );
