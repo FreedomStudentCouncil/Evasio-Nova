@@ -5,7 +5,7 @@ import { FiLogIn, FiMail, FiLock, FiAlertCircle, FiUserPlus, FiCheckCircle } fro
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
-import { loginWithEmail, registerWithEmail } from "../../firebase/auth";
+import { loginWithEmail, registerWithEmail, auth } from "../../firebase/auth";
 import TermsDialog from "../../components/TermsDialog";
 import { isUsernameTaken } from "../../firebase/user";
 
@@ -69,8 +69,11 @@ export default function LoginPage() {
     try {
       if (isSignUp) {
         // 新規登録
-        await registerWithEmail(email, password, displayName || undefined);
+        const userCredential = await registerWithEmail(email, password, displayName || undefined);
         setSuccess("登録確認メールを送信しました。メールをご確認ください。");
+        if (userCredential.user) {
+          router.push(`/wiki/user?id=${userCredential.user.uid}`);
+        }
         return;
       } else {
         // ログイン
@@ -89,8 +92,11 @@ export default function LoginPage() {
     if (isSignUp) {
       setTermsAccepted(true);
       try {
-        await registerWithEmail(email, password, displayName || undefined);
+        const userCredential = await registerWithEmail(email, password, displayName || undefined);
         setSuccess("登録確認メールを送信しました。メールをご確認ください。");
+        if (userCredential.user) {
+          router.push(`/wiki/user?id=${userCredential.user.uid}`);
+        }
       } catch (err: any) {
         console.error("登録エラー:", err);
         handleAuthError(err);

@@ -10,7 +10,8 @@ import {
   signInWithRedirect,
   getRedirectResult as firebaseGetRedirectResult,
   sendEmailVerification,
-  applyActionCode
+  applyActionCode,
+  User  // User を import
 } from 'firebase/auth';
 import { createOrUpdateUserProfile } from './user';
 import { auth } from './config';
@@ -97,6 +98,22 @@ export async function registerWithEmail(
     return userCredential;
   } catch (error) {
     console.error('メール登録エラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * 確認メールを再送信
+ */
+export async function resendVerificationEmail(user: User): Promise<void> {
+  try {
+    const actionCodeSettings = {
+      url: `${process.env.NEXT_PUBLIC_APP_URL}/login?email=${user.email}`,
+      handleCodeInApp: false,
+    };
+    await sendEmailVerification(user, actionCodeSettings);
+  } catch (error) {
+    console.error('確認メール再送信エラー:', error);
     throw error;
   }
 }
