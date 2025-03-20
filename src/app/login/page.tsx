@@ -1,11 +1,11 @@
 "use client";
 import { useState, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
-import { FiLogIn, FiMail, FiLock, FiAlertCircle, FiUserPlus } from "react-icons/fi";
+import { FiLogIn, FiMail, FiLock, FiAlertCircle, FiUserPlus, FiCheckCircle } from "react-icons/fi";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
-import { loginWithEmail, registerWithEmail } from "../../firebase/auth";
+import { loginWithEmail, registerWithEmail, auth } from "../../firebase/auth";
 import TermsDialog from "../../components/TermsDialog";
 import { isUsernameTaken } from "../../firebase/user";
 
@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState(""); // 新規登録時のみ使用
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState(""); // 追加
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { signInWithGoogle } = useAuth();
@@ -51,6 +52,7 @@ export default function LoginPage() {
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccess(""); // 追加: 処理開始時にメッセージをクリア
 
     if (isSignUp) {
       if (!termsAccepted) {
@@ -67,7 +69,12 @@ export default function LoginPage() {
     try {
       if (isSignUp) {
         // 新規登録
-        await registerWithEmail(email, password, displayName || undefined);
+        const userCredential = await registerWithEmail(email, password, displayName || undefined);
+        setSuccess("登録確認メールを送信しました。メールをご確認ください。");
+        if (userCredential.user) {
+          router.push(`/wiki/user?id=${userCredential.user.uid}`);
+        }
+        return;
       } else {
         // ログイン
         await loginWithEmail(email, password);
@@ -82,8 +89,19 @@ export default function LoginPage() {
   };
 
   const handleTermsAccept = async () => {
-    setTermsAccepted(true);
-    await handleEmailAuth({ preventDefault: () => {} } as React.FormEvent);
+    if (isSignUp) {
+      setTermsAccepted(true);
+      try {
+        const userCredential = await registerWithEmail(email, password, displayName || undefined);
+        setSuccess("登録確認メールを送信しました。メールをご確認ください。");
+        if (userCredential.user) {
+          router.push(`/wiki/user?id=${userCredential.user.uid}`);
+        }
+      } catch (err: any) {
+        console.error("登録エラー:", err);
+        handleAuthError(err);
+      }
+    }
   };
 
   // エラーハンドリング
@@ -110,6 +128,9 @@ export default function LoginPage() {
         break;
       case "username/already-in-use":  // 追加
         setError("他の人がすでに使用している名前です");
+        break;
+      case 'email-not-verified':
+        setError("メールアドレスの認証が完了していません。メールをご確認ください。");
         break;
       default:
         setError("認証に失敗しました");
@@ -181,6 +202,17 @@ export default function LoginPage() {
           >
             <FiAlertCircle className="text-red-400 mr-2 flex-shrink-0" />
             <p className="text-red-200 text-sm">{error}</p>
+          </motion.div>
+        )}
+        
+        {success && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-green-500/20 border border-green-500/40 rounded-lg p-3 mb-4 flex items-center"
+          >
+            <FiCheckCircle className="text-green-400 mr-2 flex-shrink-0" />
+            <p className="text-green-200 text-sm">{success}</p>
           </motion.div>
         )}
         

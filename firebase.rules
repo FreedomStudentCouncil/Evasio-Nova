@@ -84,9 +84,10 @@ service cloud.firestore {
       allow write: if isAuthenticated() && isOwner(userId);
     }
 
-    // システム情報のルール
-    match /info/users {
-      allow read, write: if true
+    // システム情報のルール（修正）
+    match /info/{docId} {
+      // すべてのユーザーが通知情報にアクセス可能
+      allow read, write: if true;
     }
   }
 }

@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { FiSave, FiX, FiImage, FiArrowLeft, FiTag, FiAlertCircle, FiChevronLeft, FiChevronRight, FiCode, FiEye } from "react-icons/fi";
+import { FiSave, FiX, FiImage, FiArrowLeft, FiTag, FiAlertCircle, FiChevronLeft, FiChevronRight, FiCode, FiEye, FiAlertTriangle } from "react-icons/fi";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "../../../context/AuthContext";
@@ -20,9 +20,9 @@ interface StoredImage {
   deleteUrl: string;
 }
 
-export default function CreateWikiPage() {
+export default function CreateArticlePage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isEmailVerified } = useAuth();
   
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -70,6 +70,26 @@ export default function CreateWikiPage() {
             </motion.button>
           </Link>
         </motion.div>
+      </div>
+    );
+  }
+
+  if (!isEmailVerified) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white flex items-center justify-center p-4">
+        <div className="bg-red-500/20 border border-red-500/40 rounded-lg p-6 text-center max-w-lg">
+          <FiAlertTriangle className="mx-auto text-4xl text-red-400 mb-4" />
+          <h2 className="text-xl font-bold mb-2">メール認証が必要です</h2>
+          <p className="text-gray-300 mb-4">
+            記事を作成するには、メールアドレスの認証が必要です。
+            メールボックスを確認して、認証を完了してください。
+          </p>
+          <Link href="/login">
+            <button className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition-colors">
+              ログインページに戻る
+            </button>
+          </Link>
+        </div>
       </div>
     );
   }

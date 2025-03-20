@@ -26,13 +26,16 @@ import {
 } from "../firebase/wiki";
 import { User } from "firebase/auth";
 import { getUserProfile } from "../firebase/user";
+import { addNotification } from "../firebase/notification";
 
 interface WikiCommentsProps {
   articleId: string;
   user: User | null;
+  articleTitle: string;  // 記事のタイトルを追加
+  articleAuthorId: string;  // 記事の著者IDを追加
 }
 
-export default function WikiComments({ articleId, user }: WikiCommentsProps) {
+export default function WikiComments({ articleId, user, articleTitle, articleAuthorId }: WikiCommentsProps) {
   // コメント状態管理
   const [comments, setComments] = useState<WikiComment[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
@@ -150,7 +153,7 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
     setCommentError(null);
     
     try {
-      await addComment(
+      const commentId = await addComment(
         articleId,
         {
           content: commentText.trim(),
@@ -159,8 +162,34 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
           date: serverTimestamp(),
         }
       );
+      //console.log('comment',articleAuthorId,user?.uid )
+      // 記事の著者に通知を送信（自分の記事へのコメントは通知しない）
+      if (user && articleAuthorId && user.uid !== articleAuthorId) {
+        try {
+          console.log('コメント通知送信:', {
+            送信者: user.displayName,
+            送信者ID: user.uid,
+            受信者ID: articleAuthorId,
+            記事ID: articleId,
+            記事タイトル: articleTitle
+          });
+          
+          await addNotification({
+            userId: articleAuthorId,
+            type: 'comment',
+            articleId,
+            articleTitle,
+            senderId: user.uid,
+            senderName: user.displayName || "匿名ユーザー",
+            content: commentText.trim()
+          });
+          
+          console.log('コメント通知送信完了');
+        } catch (notificationError) {
+          console.error('コメント通知の送信に失敗:', notificationError);
+        }
+      }
       
-      // コメント入力をクリアして最新のコメントを再取得
       setCommentText("");
       fetchComments(true);
       
@@ -179,7 +208,11 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
     setSubmittingComment(true);
     
     try {
-      await addReply(
+      // 親コメント情報を取得して、コメント投稿者IDを特定
+      const parentComment = comments.find(comment => comment.id === parentId);
+      const parentCommentAuthorId = parentComment?.authorId;
+
+      const replyId = await addReply(
         articleId,
         parentId,
         {
@@ -189,22 +222,57 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
           date: serverTimestamp()
         }
       );
+
+      // 通知の送信処理
+      const sendNotification = async (recipientId: string, type: 'reply') => {
+        if (!user || user.uid === recipientId) return; // 自分自身には通知しない
+        
+        try {
+          console.log('返信通知送信:', {
+            送信者: user.displayName,
+            送信者ID: user.uid,
+            受信者ID: recipientId,
+            記事ID: articleId,
+            記事タイトル: articleTitle
+          });
+          
+          await addNotification({
+            userId: recipientId,
+            type,
+            articleId,
+            articleTitle,
+            senderId: user.uid,
+            senderName: user.displayName || "匿名ユーザー",
+            content: replyText.trim()
+          });
+          
+          console.log(`${recipientId}への通知送信完了`);
+        } catch (notificationError) {
+          console.error(`${recipientId}への通知送信失敗:`, notificationError);
+        }
+      };
+
+      // 1. 記事の著者に通知（自分の記事への返信は通知しない）
+      if (articleAuthorId) {
+        await sendNotification(articleAuthorId, 'reply');
+      }
       
-      // 返信入力をクリアするが、返信フォームは閉じない
+      // 2. 親コメントの投稿者にも通知（記事著者と異なる場合のみ）
+      if (parentCommentAuthorId && parentCommentAuthorId !== articleAuthorId) {
+        await sendNotification(parentCommentAuthorId, 'reply');
+      }
+      
       setReplyText("");
       
-      // コメントの返信カウント表示を更新
       setComments(prev => prev.map(comment => 
         comment.id === parentId ? 
         { ...comment, replyCount: (comment.replyCount || 0) + 1 } : 
         comment
       ));
       
-      // 既に展開している場合は返信を再取得
       if (parentId && expandedComments.has(parentId)) {
         fetchReplies(parentId, true);
       } else {
-        // 返信が展開されていなければ展開する
         toggleComment(parentId);
       }
       
@@ -240,6 +308,36 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
     
     try {
       await incrementCommentLikeCount(articleId, commentId);
+      
+      // いいねされたコメントの情報を取得
+      const likedComment = comments.find(c => c.id === commentId);
+      
+      // コメント投稿者に通知を送信（自分のコメントへのいいねは通知しない）
+      if (user && likedComment?.authorId && user.uid !== likedComment.authorId) {
+        try {
+          console.log('いいね通知送信:', {
+            送信者: user.displayName,
+            送信者ID: user.uid,
+            受信者ID: likedComment.authorId,
+            記事ID: articleId,
+            記事タイトル: articleTitle
+          });
+          
+          await addNotification({
+            userId: likedComment.authorId,
+            type: 'like',
+            articleId,
+            articleTitle,
+            senderId: user.uid,
+            senderName: user.displayName || "匿名ユーザー",
+            content: `${likedComment.content.slice(0, 30)}${likedComment.content.length > 30 ? '...' : ''}`
+          });
+          
+          console.log('いいね通知送信完了');
+        } catch (notificationError) {
+          console.error('いいね通知の送信に失敗:', notificationError);
+        }
+      }
       
       // ローカルストレージに保存して二重いいねを防止
       const updatedLikedComments = Array.from(likedComments);
@@ -277,6 +375,37 @@ export default function WikiComments({ articleId, user }: WikiCommentsProps) {
     
     try {
       await incrementReplyLikeCount(articleId, commentId, replyId);
+      
+      // いいねされた返信の情報を取得
+      const replies = commentReplies[commentId] || [];
+      const likedReply = replies.find(r => r.id === replyId);
+      
+      // 返信投稿者に通知を送信（自分の返信へのいいねは通知しない）
+      if (user && likedReply?.authorId && user.uid !== likedReply.authorId) {
+        try {
+          console.log('いいね通知送信:', {
+            送信者: user.displayName,
+            送信者ID: user.uid,
+            受信者ID: likedReply.authorId,
+            記事ID: articleId,
+            記事タイトル: articleTitle
+          });
+          
+          await addNotification({
+            userId: likedReply.authorId,
+            type: 'like',
+            articleId,
+            articleTitle,
+            senderId: user.uid,
+            senderName: user.displayName || "匿名ユーザー",
+            content: `${likedReply.content.slice(0, 30)}${likedReply.content.length > 30 ? '...' : ''}`
+          });
+          
+          console.log('いいね通知送信完了');
+        } catch (notificationError) {
+          console.error('いいね通知の送信に失敗:', notificationError);
+        }
+      }
       
       // ローカルストレージに保存して二重いいねを防止
       const updatedLikedComments = Array.from(likedComments);

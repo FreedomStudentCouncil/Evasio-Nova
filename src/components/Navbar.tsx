@@ -3,13 +3,15 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { FiMenu, FiX, FiHome, FiBook, FiHelpCircle, FiUser, FiLogOut, FiLogIn } from "react-icons/fi";
+import { FiMenu, FiX, FiHome, FiBook, FiHelpCircle, FiUser, FiLogOut, FiLogIn, FiBell } from "react-icons/fi";
 import { useAuth } from "../context/AuthContext";
+import {getUserNotifications} from "../firebase/notification";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, signOut } = useAuth();
   const pathname = usePathname();
+  const [unreadCount, setUnreadCount] = useState(0);
   
   // 画面幅が変更された時にメニューを閉じる
   useEffect(() => {
@@ -29,6 +31,25 @@ export default function Navbar() {
   useEffect(() => {
     setIsOpen(false);
   }, [pathname]);
+
+  // 未読通知数を取得
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      if (user) {
+        try {
+          const { unreadCount } = await getUserNotifications(user.uid);
+          setUnreadCount(unreadCount);
+        } catch (error) {
+          console.error('未読通知数の取得に失敗:', error);
+        }
+      }
+    };
+
+    fetchUnreadCount();
+    // 定期的に更新（5分ごと）
+    const interval = setInterval(fetchUnreadCount, 300000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   const isActive = (path: string) => {
     return pathname === path || (path !== "/" && pathname.startsWith(path));
@@ -53,6 +74,25 @@ export default function Navbar() {
               <NavLink href="/wiki" icon={<FiBook />} text="Wiki" isActive={isActive("/wiki")} />
               <NavLink href="/evado" icon={<FiHelpCircle />} text="診断" isActive={isActive("/evado")} />
             </div>
+            
+            {user && (
+              <Link href="/notifications">
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="relative mr-4"
+                >
+                  <div className="flex items-center text-sm px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">
+                    <FiBell />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
+                  </div>
+                </motion.div>
+              </Link>
+            )}
             
             {user ? (
               <div className="flex items-center">
@@ -114,6 +154,23 @@ export default function Navbar() {
           <NavLink href="/evado" icon={<FiHelpCircle />} text="診断" isActive={isActive("/evado")} mobile />
           
           <div className="border-t border-white/10 my-2 pt-2">
+            {user && (
+              <NavLink
+                href="/notifications"
+                icon={
+                  <div className="relative">
+                    <FiBell />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
+                  </div>
+                }
+                text="通知"
+                mobile
+              />
+            )}
             {user ? (
               <>
                 <NavLink href={`/wiki/user?id=${user.uid}`} icon={<FiUser />} text={user.displayName || "ユーザー"} mobile />

@@ -255,3 +255,34 @@ async function removeUsername(username: string): Promise<void> {
     usernames: arrayRemove(username)
   });
 }
+
+/**
+ * ユーザー名を更新する
+ * @param uid ユーザーID
+ * @param oldUsername 古いユーザー名
+ * @param newUsername 新しいユーザー名
+ */
+export async function updateUsername(uid: string, oldUsername: string, newUsername: string): Promise<void> {
+  try {
+    // 新しいユーザー名が既に使用されているかチェック
+    if (await isUsernameTaken(newUsername)) {
+      const error = new Error('Username already in use') as AuthError;
+      error.code = 'username/already-in-use';
+      throw error;
+    }
+
+    // ユーザードキュメントを更新
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, {
+      displayName: newUsername,
+      username: newUsername
+    });
+
+    // info/users のユーザー名リストを更新
+    await removeUsername(oldUsername);
+    await registerUsername(newUsername);
+  } catch (error) {
+    console.error('ユーザー名更新エラー:', error);
+    throw error;
+  }
+}
