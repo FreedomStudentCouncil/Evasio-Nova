@@ -83,5 +83,10 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAuthenticated() && isOwner(userId);
     }
+
+    // システム情報のルール
+    match /info/users {
+      allow read, write: if true
+    }
   }
 }

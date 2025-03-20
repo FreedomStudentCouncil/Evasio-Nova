@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from './config';
 import { User } from 'firebase/auth';
 
@@ -11,6 +11,11 @@ export interface UserProfile {
   joinedAt: Date | string;
   lastLoginAt: Date | string;
   profileImage?: string; // base64エンコードされた画像データ
+}
+
+// カスタムエラー型の定義
+interface AuthError extends Error {
+  code?: string;
 }
 
 /**
@@ -47,9 +52,23 @@ export async function createOrUpdateUserProfile(user: User): Promise<void> {
     const now = new Date().toISOString();
     
     if (!userSnap.exists()) {
+      // displayNameが指定されている場合は、それを使用
+      const username = displayName || email?.split('@')[0] || '匿名ユーザー';
+      
+      // ユーザー名の重複チェック
+      if (await isUsernameTaken(username)) {
+        const error = new Error('Username already in use') as AuthError;
+        error.code = 'username/already-in-use';
+        throw error;
+      }
+      
+      // ユーザー名を登録
+      await registerUsername(username);
+      
       // 新規ユーザー
       await setDoc(userRef, {
-        displayName: displayName || email?.split('@')[0] || '匿名ユーザー',
+        displayName: username,
+        username: username,
         email,
         photoURL: photoURL || null,
         bio: '',
@@ -194,5 +213,45 @@ function convertToBase64(blob: Blob): Promise<string> {
     };
     reader.onerror = () => reject(new Error('Failed to read file'));
     reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * ユーザー名が既に使用されているかチェックする
+ * @param username チェックするユーザー名
+ * @returns boolean
+ */
+export async function isUsernameTaken(username: string): Promise<boolean> {
+  const usersDoc = doc(db, 'info', 'users');
+  const docSnap = await getDoc(usersDoc);
+  
+  if (!docSnap.exists()) {
+    await setDoc(usersDoc, { usernames: [] });
+    return false;
+  }
+  
+  const usernames = docSnap.data().usernames || [];
+  return usernames.includes(username);
+}
+
+/**
+ * ユーザー名を登録する
+ * @param username 登録するユーザー名
+ */
+async function registerUsername(username: string): Promise<void> {
+  const usersDoc = doc(db, 'info', 'users');
+  await updateDoc(usersDoc, {
+    usernames: arrayUnion(username)
+  });
+}
+
+/**
+ * ユーザー名を削除する
+ * @param username 削除するユーザー名
+ */
+async function removeUsername(username: string): Promise<void> {
+  const usersDoc = doc(db, 'info', 'users');
+  await updateDoc(usersDoc, {
+    usernames: arrayRemove(username)
   });
 }

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { FiLogIn, FiMail, FiLock, FiAlertCircle, FiUserPlus } from "react-icons/fi";
 import Link from "next/link";
@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import { loginWithEmail, registerWithEmail } from "../../firebase/auth";
 import TermsDialog from "../../components/TermsDialog";
+import { isUsernameTaken } from "../../firebase/user";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -20,15 +21,46 @@ export default function LoginPage() {
   const [redirecting, setRedirecting] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [displayNameError, setDisplayNameError] = useState("");
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+
+  // 表示名の検証を行う（debounce付き）
+  useEffect(() => {
+    if (!displayName || !isSignUp) return;
+
+    const timer = setTimeout(async () => {
+      setIsCheckingUsername(true);
+      try {
+        const taken = await isUsernameTaken(displayName);
+        if (taken) {
+          setDisplayNameError("他の人がすでに使用している名前です");
+        } else {
+          setDisplayNameError("");
+        }
+      } catch (err) {
+        console.error("ユーザー名チェックエラー:", err);
+      } finally {
+        setIsCheckingUsername(false);
+      }
+    }, 500); // 500ms後に実行
+
+    return () => clearTimeout(timer);
+  }, [displayName, isSignUp]);
 
   // 標準ログイン処理
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    if (isSignUp && !termsAccepted) {
-      setShowTerms(true);
-      return;
+    if (isSignUp) {
+      if (!termsAccepted) {
+        setShowTerms(true);
+        return;
+      }
+      if (displayNameError) {
+        setError("表示名を確認してください");
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -75,6 +107,9 @@ export default function LoginPage() {
         break;
       case "auth/email-already-in-use":
         setError("このメールアドレスは既に使用されています");
+        break;
+      case "username/already-in-use":  // 追加
+        setError("他の人がすでに使用している名前です");
         break;
       default:
         setError("認証に失敗しました");
@@ -163,10 +198,22 @@ export default function LoginPage() {
                   type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  className="w-full bg-white/10 border border-white/20 rounded-lg py-2 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className={`w-full bg-white/10 border ${
+                    displayNameError ? 'border-red-500' : 'border-white/20'
+                  } rounded-lg py-2 pl-10 pr-4 focus:outline-none focus:ring-2 ${
+                    displayNameError ? 'focus:ring-red-500' : 'focus:ring-purple-500'
+                  }`}
                   placeholder="あなたの表示名"
                 />
+                {isCheckingUsername && (
+                  <div className="absolute right-3 top-3">
+                    <div className="animate-spin h-4 w-4 border-2 border-blue-500 rounded-full border-t-transparent"></div>
+                  </div>
+                )}
               </div>
+              {displayNameError && (
+                <p className="text-red-400 text-sm mt-1">{displayNameError}</p>
+              )}
             </div>
           )}
           
