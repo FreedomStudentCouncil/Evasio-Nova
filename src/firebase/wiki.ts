@@ -19,6 +19,8 @@ import {
   getFirestore
 } from 'firebase/firestore';
 import { db, searchDb, getSearchDb } from './config';
+import { calculateArticleScore } from '../utils/articleScoreCalculator';
+import { cacheManager } from '../utils/cacheManager'; // cacheManagerをインポート
 
 // Wiki記事の型定義 - メインDBに保存する完全な記事情報
 export interface WikiArticle {
@@ -35,7 +37,9 @@ export interface WikiArticle {
   lastUpdated?: Timestamp | FieldValue;
   usefulCount: number;
   likeCount: number;
+  dislikeCount?: number; // 管理者のみが見える低評価カウント
   deleteUrl?: string;
+  articleScore?: number; // 記事の評価スコアを追加
 }
 
 // 検索用DB用の記事概要型定義
@@ -51,6 +55,8 @@ export interface ArticleSummary {
   lastUpdated?: Timestamp | FieldValue;
   usefulCount: number;
   likeCount: number;
+  dislikeCount?: number;
+  articleScore?: number; // 記事スコアを追加
 }
 
 // コメントの型定義を修正
@@ -197,11 +203,27 @@ export async function createArticle(article: Omit<WikiArticle, 'id'>): Promise<s
     const now = serverTimestamp();
     let id: string;
     
-    // 1. メインDBに完全な記事データを保存（認証済みユーザーによるアクセス）
+    // 記事スコアを計算
+    const articleScore = calculateArticleScore(
+      article.content,
+      article.likeCount || 0,
+      article.usefulCount || 0,
+      article.dislikeCount || 0
+    );
+    
+    // メインDB用のデータから評価関連データを除外
+    const mainDbArticle = { ...article };
+    // オプショナルプロパティに対して安全に削除する
+    if ('usefulCount' in mainDbArticle) delete (mainDbArticle as any).usefulCount;
+    if ('likeCount' in mainDbArticle) delete (mainDbArticle as any).likeCount;
+    if ('dislikeCount' in mainDbArticle) delete (mainDbArticle as any).dislikeCount;
+    if ('articleScore' in mainDbArticle) delete (mainDbArticle as any).articleScore;
+    
+    // 1. メインDBに完全な記事データを保存（評価関連データを除く）
     try {
       console.log("メインDBに記事を保存中...");
       const docRef = await addDoc(articlesRef, {
-        ...article,
+        ...mainDbArticle,
         date: article.date || now,
         lastUpdated: now,
         content: article.content
@@ -228,7 +250,8 @@ export async function createArticle(article: Omit<WikiArticle, 'id'>): Promise<s
         date: article.date || now,
         lastUpdated: now,
         usefulCount: article.usefulCount || 0,
-        likeCount: article.likeCount || 0
+        likeCount: article.likeCount || 0,
+        articleScore // 記事スコアを追加
       });
       console.log("検索用DBへの保存完了");
     } catch (searchDbError) {
@@ -262,12 +285,32 @@ export async function updateArticle(id: string, updateData: Partial<WikiArticle>
   try {
     const now = serverTimestamp();
     
-    // メインDB更新用データを作成（評価カウント以外）
-    const mainDbUpdateData: Partial<WikiArticle> = { ...updateData, lastUpdated: now };
+    // 最新の記事全体を取得
+    const article = await getArticleById(id);
+    if (!article) {
+      throw new Error("記事が見つかりません");
+    }
     
-    // 評価カウントはメインDBから削除
-    if ('usefulCount' in mainDbUpdateData) delete mainDbUpdateData.usefulCount;
-    if ('likeCount' in mainDbUpdateData) delete mainDbUpdateData.likeCount;
+    // 更新されるデータを含めた記事内容でスコアを再計算
+    const updatedContent = updateData.content || article.content;
+    const articleScore = calculateArticleScore(
+      updatedContent,
+      article.likeCount,
+      article.usefulCount,
+      article.dislikeCount || 0
+    );
+    
+    // メインDB更新用データを作成（評価カウントとスコアは除外）
+    const mainDbUpdateData: Partial<WikiArticle> = { 
+      ...updateData, 
+      lastUpdated: now
+    };
+    
+    // 評価関連データはメインDBから削除 (オプショナルとして安全に削除)
+    if ('usefulCount' in mainDbUpdateData) delete (mainDbUpdateData as any).usefulCount;
+    if ('likeCount' in mainDbUpdateData) delete (mainDbUpdateData as any).likeCount;
+    if ('dislikeCount' in mainDbUpdateData) delete (mainDbUpdateData as any).dislikeCount;
+    if ('articleScore' in mainDbUpdateData) delete (mainDbUpdateData as any).articleScore;
     
     // 1. メインDBの記事を更新
     const docRef = doc(db, 'wikiArticles', id);
@@ -275,7 +318,10 @@ export async function updateArticle(id: string, updateData: Partial<WikiArticle>
     
     // 2. 検索用DBの記事概要も更新（関連フィールドのみ）
     const summaryRef = doc(searchDb, 'articleSummaries', id);
-    const summaryUpdateData: Partial<ArticleSummary> = { lastUpdated: now };
+    const summaryUpdateData: Partial<ArticleSummary> = { 
+      lastUpdated: now,
+      articleScore // 更新されたスコアを追加
+    };
     
     // 検索用DBに関連するフィールドだけを抽出
     const relevantFields: (keyof ArticleSummary)[] = [
@@ -396,9 +442,40 @@ export async function incrementUsefulCount(id: string): Promise<void> {
 
     // 検索用DBの記事概要を更新
     const articleSummaryRef = doc(searchDb, 'articleSummaries', id);
-    await updateDoc(articleSummaryRef, {
-      usefulCount: increment(1)
-    });
+    
+    // 記事データを取得しスコアを再計算
+    if (article) {
+      const newUsefulCount = (article.usefulCount || 0) + 1;
+      const newScore = calculateArticleScore(
+        article.content,
+        article.likeCount,
+        newUsefulCount,
+        article.dislikeCount || 0
+      );
+      
+      // スコアも一緒に更新（searchDBのみ）
+      await updateDoc(articleSummaryRef, {
+        usefulCount: increment(1),
+        articleScore: newScore
+      });
+      
+      // キャッシュも更新（もし存在すれば）
+      try {
+        await cacheManager.updateArticleCount(
+          id, 
+          article.likeCount, 
+          newUsefulCount,
+          newScore
+        );
+      } catch (cacheError) {
+        console.warn("キャッシュの更新に失敗:", cacheError);
+      }
+    } else {
+      // 記事が見つからない場合は通常通り更新
+      await updateDoc(articleSummaryRef, {
+        usefulCount: increment(1)
+      });
+    }
     
     // 検索用DBのcountsコレクションを更新
     const countsRef = doc(searchDb, 'counts', 'article');
@@ -485,9 +562,40 @@ export async function incrementLikeCount(id: string): Promise<void> {
 
     // 検索用DBの記事概要を更新
     const articleSummaryRef = doc(searchDb, 'articleSummaries', id);
-    await updateDoc(articleSummaryRef, {
-      likeCount: increment(1)
-    });
+    
+    // 記事データを取得しスコアを再計算
+    if (article) {
+      const newLikeCount = (article.likeCount || 0) + 1;
+      const newScore = calculateArticleScore(
+        article.content,
+        newLikeCount,
+        article.usefulCount,
+        article.dislikeCount || 0
+      );
+      
+      // スコアも一緒に更新（searchDBのみ）
+      await updateDoc(articleSummaryRef, {
+        likeCount: increment(1),
+        articleScore: newScore
+      });
+      
+      // キャッシュも更新（もし存在すれば）
+      try {
+        await cacheManager.updateArticleCount(
+          id, 
+          newLikeCount, 
+          article.usefulCount,
+          newScore
+        );
+      } catch (cacheError) {
+        console.warn("キャッシュの更新に失敗:", cacheError);
+      }
+    } else {
+      // 記事が見つからない場合は通常通り更新
+      await updateDoc(articleSummaryRef, {
+        likeCount: increment(1)
+      });
+    }
     
     // 検索用DBのcountsコレクションを更新
     const countsRef = doc(searchDb, 'counts', 'article');
@@ -557,6 +665,87 @@ export async function incrementLikeCount(id: string): Promise<void> {
     }
   } catch (error) {
     console.error('いいねカウント更新エラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * 「低評価」カウントを増やす（検索用DBのみ更新）- 管理者のみが使用
+ * @param id 記事ID
+ * @param isAdmin 管理者かどうか
+ */
+export async function incrementDislikeCount(id: string, isAdmin: boolean = false): Promise<void> {
+  try {
+    // 管理者チェック（アプリケーションコードでの権限管理）
+    if (!isAdmin) {
+      throw new Error('管理者権限がありません');
+    }
+    
+    // 記事データを取得しスコアを再計算
+    const article = await getArticleById(id);
+    const articleSummaryRef = doc(searchDb, 'articleSummaries', id);
+    
+    if (article) {
+      const newDislikeCount = (article.dislikeCount || 0) + 1;
+      const newScore = calculateArticleScore(
+        article.content,
+        article.likeCount,
+        article.usefulCount,
+        newDislikeCount
+      );
+      
+      // スコアも一緒に更新（searchDBのみ）
+      await updateDoc(articleSummaryRef, {
+        dislikeCount: increment(1),
+        articleScore: newScore
+      });
+      
+      // メインDBは更新しない
+    } else {
+      // 記事が見つからない場合は通常通り更新
+      await updateDoc(articleSummaryRef, {
+        dislikeCount: increment(1)
+      });
+    }
+    
+    // 検索用DBのcountsコレクションを更新
+    const countsRef = doc(searchDb, 'counts', 'article');
+    const countsDoc = await getDoc(countsRef);
+
+    if (countsDoc.exists()) {
+      // 既存のデータを更新
+      const countsData = countsDoc.data();
+      const currentCounts = countsData.counts || {};
+      const articleCounts = currentCounts[id] || { likeCount: 0, usefulCount: 0, dislikeCount: 0 };
+      
+      currentCounts[id] = {
+        ...articleCounts,
+        dislikeCount: (articleCounts.dislikeCount || 0) + 1
+      };
+      
+      await setDoc(countsRef, { 
+        counts: currentCounts,
+        lastUpdated: Date.now() // キャッシュ有効期限の起点
+      }, { merge: true });
+    } else {
+      // 新規作成
+      const articleData = await getArticleById(id);
+      const likeCount = articleData?.likeCount || 0;
+      const usefulCount = articleData?.usefulCount || 0;
+      
+      await setDoc(countsRef, { 
+        counts: { 
+          [id]: { 
+            likeCount, 
+            usefulCount,
+            dislikeCount: 1
+          } 
+        },
+        lastUpdated: Date.now() // キャッシュ有効期限の起点
+      });
+    }
+  } catch (error) {
+    console.error('低評価カウント更新エラー:', error);
     throw error;
   }
 }
@@ -865,7 +1054,7 @@ export async function getArticleCounts(): Promise<{ [articleId: string]: { likeC
 }
 
 // 特定の記事のカウント情報を取得（キャッシュを使わない、常に最新）
-export async function getArticleCountById(articleId: string): Promise<{ likeCount: number; usefulCount: number }> {
+export async function getArticleCountById(articleId: string): Promise<{ likeCount: number; usefulCount: number; dislikeCount?: number }> {
   try {
     // 記事概要からカウントを取得（最も信頼性の高いソース）
     const articleSummaryRef = doc(searchDb, 'articleSummaries', articleId);
@@ -875,16 +1064,17 @@ export async function getArticleCountById(articleId: string): Promise<{ likeCoun
       const data = summaryDoc.data();
       return {
         likeCount: data.likeCount || 0,
-        usefulCount: data.usefulCount || 0
+        usefulCount: data.usefulCount || 0,
+        dislikeCount: data.dislikeCount || 0
       };
     }
     
     // 記事概要がない場合、エラー処理
     console.warn('記事概要が見つかりません:', articleId);
-    return { likeCount: 0, usefulCount: 0 };
+    return { likeCount: 0, usefulCount: 0, dislikeCount: 0 };
   } catch (error) {
     console.error('記事カウント情報の取得に失敗:', error);
-    return { likeCount: 0, usefulCount: 0 };
+    return { likeCount: 0, usefulCount: 0, dislikeCount: 0 };
   }
 }
 
