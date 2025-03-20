@@ -38,13 +38,17 @@ body {
   height: 100dvh;
 }
 
-/* MDXコンテンツのスタイル */
+/* Markdownプレビューのスタイル改善 */
+.prose-invert {
+  @apply text-white/90;
+}
+
 .prose-invert h1 {
   @apply text-2xl font-bold mt-6 mb-4 text-white;
 }
 
 .prose-invert h2 {
-  @apply text-xl font-semibold mt-5 mb-3 text-white;
+  @apply text-xl font-semibold mt-5 mb-3 text-white border-b pb-1 border-white/20;
 }
 
 .prose-invert h3 {
@@ -89,6 +93,10 @@ body {
 
 .prose-invert th, .prose-invert td {
   @apply border border-white/20 p-2;
+}
+
+.prose-invert img {
+  @apply rounded-lg max-w-full mx-auto my-4;
 }
 
 /* 画像アップロードスタイル */
