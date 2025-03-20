@@ -11,6 +11,7 @@ import MarkdownPreview from "../../../components/MarkdownPreview";
 import { createArticle, getAllTags, updateTags, Tag } from "../../../firebase/wiki";
 import { deleteImage } from "../../../imgbb/api";
 import MarkdownToolbar from "../../../components/MarkdownToolbar";
+import { draftManager, DraftArticle } from "../../../utils/draftManager";
 
 // 型定義を追加
 interface StoredImage {
@@ -42,6 +43,10 @@ export default function CreateWikiPage() {
     tags?: string;
   }>({});
   const [editorMode, setEditorMode] = useState<'raw' | 'preview'>('raw');
+  const [draftConfirmOpen, setDraftConfirmOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [draftData, setDraftData] = useState<DraftArticle | null>(null);
 
   // 認証チェック
   if (!user) {
@@ -254,6 +259,65 @@ export default function CreateWikiPage() {
     }
   };
 
+  // 下書きの自動保存
+  useEffect(() => {
+    const saveDraft = async () => {
+      if (title || content || description || tags.length > 0 || images.length > 0) {
+        setIsSaving(true);
+        try {
+          const draft: DraftArticle = {
+            title,
+            content,
+            description,
+            tags,
+            images,
+            lastModified: Date.now()
+          };
+          await draftManager.saveDraft(draft);
+          setLastSaved(new Date());
+        } finally {
+          setIsSaving(false);
+        }
+      }
+    };
+
+    // 入力から500ms後に保存
+    const timeoutId = setTimeout(saveDraft, 500);
+    return () => clearTimeout(timeoutId);
+  }, [title, content, description, tags, images]);
+
+  // 初回表示時の下書き確認処理を修正
+  useEffect(() => {
+    const checkDraft = async () => {
+      const draft = await draftManager.getDraft();
+      if (draft) {
+        setDraftData(draft);
+        setDraftConfirmOpen(true);
+      }
+    };
+    checkDraft();
+  }, []);
+
+  // 下書きを読み込む処理を修正
+  const loadDraft = () => {
+    if (draftData) {
+      setTitle(draftData.title);
+      setContent(draftData.content);
+      setDescription(draftData.description);
+      setTags(draftData.tags);
+      setImages(draftData.images);
+    }
+    setDraftConfirmOpen(false);
+    setDraftData(null);
+  };
+
+  // 下書きを破棄する処理を修正
+  const discardDraft = async () => {
+    await draftManager.deleteDraft();
+    setDraftConfirmOpen(false);
+    setDraftData(null);
+  };
+
   // フォーム送信処理を修正
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -287,6 +351,9 @@ export default function CreateWikiPage() {
       await updateTags(tags);
       console.log("記事の投稿に成功しました。ID:", articleId);
       
+      // 投稿成功時に下書きを削除
+      await draftManager.deleteDraft();
+
       // 投稿完了メッセージをユーザーに表示
       alert("記事の投稿が完了しました！");
       
@@ -305,6 +372,93 @@ export default function CreateWikiPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white">
+      {/* 下書き確認モーダル */}
+      {draftConfirmOpen && draftData && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-slate-800 rounded-xl border border-white/20 p-6 m-4 max-w-2xl w-full"
+          >
+            <h3 className="text-xl font-bold mb-4">下書きが見つかりました</h3>
+            <div className="mb-6 space-y-4">
+              <div className="bg-slate-700/50 rounded-lg p-4">
+                {/* 下書きのプレビュー */}
+                <div className="mb-4">
+                  <span className="text-slate-400 text-sm">タイトル:</span>
+                  <h4 className="text-lg font-medium">{draftData.title || "無題"}</h4>
+                </div>
+                {draftData.tags.length > 0 && (
+                  <div className="mb-4">
+                    <span className="text-slate-400 text-sm">タグ:</span>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {draftData.tags.map(tag => (
+                        <span key={tag} className="bg-blue-500/30 text-blue-100 rounded-full px-2 py-0.5 text-sm">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <span className="text-slate-400 text-sm">本文プレビュー:</span>
+                  <p className="mt-1 text-slate-300 line-clamp-3">
+                    {draftData.content || "本文なし"}
+                  </p>
+                </div>
+                <div className="mt-4 text-sm text-slate-400">
+                  最終更新: {new Date(draftData.lastModified).toLocaleString()}
+                </div>
+              </div>
+              <p className="text-slate-300">
+                この下書きを読み込みますか？
+              </p>
+            </div>
+            <div className="flex gap-4">
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={loadDraft}
+                className="flex-1 py-2 px-4 bg-purple-500 rounded-lg font-medium hover:bg-purple-600"
+              >
+                下書きを読み込む
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={discardDraft}
+                className="flex-1 py-2 px-4 bg-white/10 rounded-lg font-medium hover:bg-white/20"
+              >
+                破棄して新規作成
+              </motion.button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* 保存状態のインジケータを追加 */}
+      <div className="fixed bottom-4 right-4 z-40">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-slate-800/90 backdrop-blur-sm rounded-lg border border-white/10 px-4 py-2 text-sm flex items-center gap-2"
+        >
+          {isSaving ? (
+            <>
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
+              <span>保存中...</span>
+            </>
+          ) : lastSaved ? (
+            <>
+              <div className="w-2 h-2 bg-green-400 rounded-full" />
+              <span>
+                下書き保存済み ({new Date(lastSaved).toLocaleTimeString()} 更新)
+              </span>
+            </>
+          ) : null}
+        </motion.div>
+      </div>
+
       <div className="container mx-auto px-4 py-12">
         <div className="max-w-4xl mx-auto">
           <Link href="/wiki">
