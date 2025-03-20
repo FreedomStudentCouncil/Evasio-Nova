@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { FiSave, FiX, FiImage, FiArrowLeft, FiTag, FiAlertCircle, FiChevronLeft, FiChevronRight } from "react-icons/fi";
+import { FiSave, FiX, FiImage, FiArrowLeft, FiTag, FiAlertCircle, FiChevronLeft, FiChevronRight, FiShield } from "react-icons/fi";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "../context/AuthContext";
@@ -19,7 +19,7 @@ interface StoredImage {
 
 export default function EditWikiPageClient() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth(); // isAdminを追加
   const searchParams = useSearchParams();
   const articleId = searchParams.get("id") || "";
   
@@ -119,8 +119,9 @@ export default function EditWikiPageClient() {
           }]);
         }
         
+        // 管理者の場合は常に編集可能
         const isMyArticle = article.authorId === user.uid;
-        setIsOwner(isMyArticle);
+        setIsOwner(isMyArticle || isAdmin); // 管理者も記事所有者とみなす
         
       } catch (error) {
         console.error("記事の取得に失敗しました:", error);
@@ -131,7 +132,7 @@ export default function EditWikiPageClient() {
     };
     
     fetchArticleData();
-  }, [articleId, user]);
+  }, [articleId, user, isAdmin]); // isAdminを依存配列に追加
 
   useEffect(() => {
     const fetchTags = async () => {
@@ -220,8 +221,8 @@ export default function EditWikiPageClient() {
     );
   }
   
-  // 自分の記事でない場合
-  if (!isOwner) {
+  // 自分の記事でない場合（管理者以外）
+  if (!isOwner && !isAdmin) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white flex flex-col justify-center items-center p-4">
         <motion.div 
@@ -398,9 +399,35 @@ export default function EditWikiPageClient() {
             className="bg-white/10 backdrop-blur-md rounded-xl border border-white/20 overflow-hidden"
           >
             <div className="p-6 sm:p-8 border-b border-white/10">
-              <h1 className="text-2xl sm:text-3xl font-bold mb-2">記事を編集</h1>
+              <div className="flex justify-between items-center">
+                <h1 className="text-2xl sm:text-3xl font-bold mb-2">記事を編集</h1>
+                
+                {/* 管理者モードバッジ */}
+                {isAdmin && !isOwner && (
+                  <div className="bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg px-3 py-1.5 flex items-center">
+                    <FiShield className="mr-2" />
+                    <span>管理者モード</span>
+                  </div>
+                )}
+              </div>
               <p className="text-slate-300">最新の情報に更新して、より役立つコンテンツにしましょう</p>
             </div>
+            
+            {/* 管理者警告メッセージ */}
+            {isAdmin && !isOwner && (
+              <div className="mx-6 sm:mx-8 mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <div className="flex items-start">
+                  <FiAlertCircle className="text-amber-400 mr-3 mt-0.5" />
+                  <div>
+                    <h3 className="font-medium text-amber-300">管理者として編集しています</h3>
+                    <p className="text-slate-300 text-sm mt-1">
+                      あなたは管理者として他のユーザーの記事を編集しています。
+                      記事内容に問題がある場合のみ編集してください。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             
             <form onSubmit={handleSubmit} className="p-6 sm:p-8">
               {/* タイトル */}

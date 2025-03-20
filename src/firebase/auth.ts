@@ -16,6 +16,24 @@ import { auth } from './config';
 // Googleプロバイダーのインスタンス
 const googleProvider = new GoogleAuthProvider();
 
+// 管理者のメールアドレスリスト
+// 環境変数から取得するのがベストですが、ここでは直接記述します
+const ADMIN_EMAILS = [
+  'egnm9stasshe@gmail.com',
+  'admin@evasio-nova.com',
+  // 必要に応じて管理者メールアドレスを追加
+];
+
+/**
+ * ユーザーが管理者かどうかを判定する
+ * @param email ユーザーのメールアドレス
+ * @returns 管理者の場合true、それ以外はfalse
+ */
+export function isAdmin(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
 /**
  * メールとパスワードでログインする
  * @param email メールアドレス

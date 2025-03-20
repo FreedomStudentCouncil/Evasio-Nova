@@ -35,6 +35,7 @@ export interface WikiArticle {
   lastUpdated?: Timestamp | FieldValue;
   usefulCount: number;
   likeCount: number;
+  dislikeCount?: number; // 管理者のみが見える低評価カウント
   deleteUrl?: string;
 }
 
@@ -562,6 +563,66 @@ export async function incrementLikeCount(id: string): Promise<void> {
 }
 
 /**
+ * 「低評価」カウントを増やす（検索用DBのみ更新）- 管理者のみが使用
+ * @param id 記事ID
+ * @param isAdmin 管理者かどうか
+ */
+export async function incrementDislikeCount(id: string, isAdmin: boolean = false): Promise<void> {
+  try {
+    // 管理者チェック（アプリケーションコードでの権限管理）
+    if (!isAdmin) {
+      throw new Error('管理者権限がありません');
+    }
+    
+    // 検索用DBの記事概要を更新
+    const articleSummaryRef = doc(searchDb, 'articleSummaries', id);
+    await updateDoc(articleSummaryRef, {
+      dislikeCount: increment(1)
+    });
+    
+    // 検索用DBのcountsコレクションを更新
+    const countsRef = doc(searchDb, 'counts', 'article');
+    const countsDoc = await getDoc(countsRef);
+
+    if (countsDoc.exists()) {
+      // 既存のデータを更新
+      const countsData = countsDoc.data();
+      const currentCounts = countsData.counts || {};
+      const articleCounts = currentCounts[id] || { likeCount: 0, usefulCount: 0, dislikeCount: 0 };
+      
+      currentCounts[id] = {
+        ...articleCounts,
+        dislikeCount: (articleCounts.dislikeCount || 0) + 1
+      };
+      
+      await setDoc(countsRef, { 
+        counts: currentCounts,
+        lastUpdated: Date.now() // キャッシュ有効期限の起点
+      }, { merge: true });
+    } else {
+      // 新規作成
+      const articleData = await getArticleById(id);
+      const likeCount = articleData?.likeCount || 0;
+      const usefulCount = articleData?.usefulCount || 0;
+      
+      await setDoc(countsRef, { 
+        counts: { 
+          [id]: { 
+            likeCount, 
+            usefulCount,
+            dislikeCount: 1
+          } 
+        },
+        lastUpdated: Date.now() // キャッシュ有効期限の起点
+      });
+    }
+  } catch (error) {
+    console.error('低評価カウント更新エラー:', error);
+    throw error;
+  }
+}
+
+/**
  * 記事の評価カウントを取得する（検索用DB）
  * @param id 記事ID
  * @returns {usefulCount, likeCount} 形式のオブジェクト
@@ -865,7 +926,7 @@ export async function getArticleCounts(): Promise<{ [articleId: string]: { likeC
 }
 
 // 特定の記事のカウント情報を取得（キャッシュを使わない、常に最新）
-export async function getArticleCountById(articleId: string): Promise<{ likeCount: number; usefulCount: number }> {
+export async function getArticleCountById(articleId: string): Promise<{ likeCount: number; usefulCount: number; dislikeCount?: number }> {
   try {
     // 記事概要からカウントを取得（最も信頼性の高いソース）
     const articleSummaryRef = doc(searchDb, 'articleSummaries', articleId);
@@ -875,16 +936,17 @@ export async function getArticleCountById(articleId: string): Promise<{ likeCoun
       const data = summaryDoc.data();
       return {
         likeCount: data.likeCount || 0,
-        usefulCount: data.usefulCount || 0
+        usefulCount: data.usefulCount || 0,
+        dislikeCount: data.dislikeCount || 0
       };
     }
     
     // 記事概要がない場合、エラー処理
     console.warn('記事概要が見つかりません:', articleId);
-    return { likeCount: 0, usefulCount: 0 };
+    return { likeCount: 0, usefulCount: 0, dislikeCount: 0 };
   } catch (error) {
     console.error('記事カウント情報の取得に失敗:', error);
-    return { likeCount: 0, usefulCount: 0 };
+    return { likeCount: 0, usefulCount: 0, dislikeCount: 0 };
   }
 }
 

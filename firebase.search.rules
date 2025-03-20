@@ -1,7 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 検索用DBでは認証が共有されないため、認証に頼らないルールを設定
+    // 検索用DBでは認証が共有されないため、認証に依存しないルールを設定する
     
     // 記事概要のルール - 検索用DB
     match /articleSummaries/{articleId} {
@@ -17,10 +17,10 @@ service cloud.firestore {
         request.resource.data.tags.size() > 0 &&
         request.resource.data.tags.size() <= 8;
       
-      // いいね・役に立ったカウントの更新は誰でも可能
-      // その他の更新は元の作者のIDを維持することを確認
+      // 評価カウントの更新は誰でも可能
+      // 認証情報が共有されないため、メインDBでの権限チェックに依存する
       allow update: if 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usefulCount', 'likeCount']) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usefulCount', 'likeCount', 'dislikeCount'])) ||
         (request.resource.data.authorId == resource.data.authorId &&
          request.resource.data.tags is list &&
          request.resource.data.tags.size() > 0 &&
@@ -30,10 +30,11 @@ service cloud.firestore {
       allow delete: if true;
     }
     
-    // countsコレクションのルール - いいね数と役立った数のキャッシュ
+    // countsコレクションのルール - 評価カウントのキャッシュ
     match /counts/{docId} {
-      allow read: if true; // 読み取りは誰でも可能
-      allow write: if true; // 書き込みも誰でも可能（アプリケーションコードで制御）
+      // 認証が共有されないため、すべての操作を許可する
+      // 実際の権限チェックはアプリケーションコードで行う
+      allow read, write: if true;
     }
     
     // タグ情報などのメタデータ
