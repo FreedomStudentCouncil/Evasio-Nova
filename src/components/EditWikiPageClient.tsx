@@ -2,13 +2,15 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { FiSave, FiX, FiImage, FiArrowLeft, FiTag, FiAlertCircle, FiChevronLeft, FiChevronRight, FiShield } from "react-icons/fi";
+import { FiSave, FiX, FiImage, FiArrowLeft, FiTag, FiAlertCircle, FiChevronLeft, FiChevronRight, FiShield, FiCode, FiEye } from "react-icons/fi";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "../context/AuthContext";
 import ImageUploader from "./ImageUploader";
+import MarkdownPreview from "./MarkdownPreview";
 import { getArticleById, updateArticle, WikiArticle, getAllTags, updateTags, decrementTags, Tag } from "../firebase/wiki";
 import { deleteImage } from "../imgbb/api";
+import MarkdownToolbar from "./MarkdownToolbar";
 
 // 型定義を追加
 interface StoredImage {
@@ -44,6 +46,8 @@ export default function EditWikiPageClient() {
     content?: string;
     tags?: string;
   }>({});
+  // エディタモードのステートを追加
+  const [editorMode, setEditorMode] = useState<'raw' | 'preview'>('raw');
 
   // 全角文字を考慮した文字数カウント関数を修正
   const countFullWidthChars = (str: string): number => {
@@ -269,11 +273,33 @@ export default function EditWikiPageClient() {
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
       const text = textarea.value;
-      const newText = text.substring(0, start) + markdown + text.substring(end);
+      
+      // 選択テキストがある場合は、それを活かしてマークダウンを挿入
+      const selectedText = text.substring(start, end);
+      let insertText = markdown;
+      
+      if (selectedText) {
+        // マークダウンパターンに応じて選択テキストを適切に挿入
+        if (markdown.includes('**')) {
+          insertText = `**${selectedText}**`;
+        } else if (markdown.includes('*')) {
+          insertText = `*${selectedText}*`;
+        } else if (markdown.includes('[')) {
+          insertText = `[${selectedText}](URL)`;
+        } else if (markdown.includes('```')) {
+          insertText = `\`\`\`\n${selectedText}\n\`\`\``;
+        } else {
+          insertText = markdown + selectedText;
+        }
+      }
+      
+      const newText = text.substring(0, start) + insertText + text.substring(end);
       setContent(newText);
+      
       // カーソル位置を更新
       textarea.focus();
-      textarea.selectionStart = textarea.selectionEnd = start + markdown.length;
+      const newCursorPos = start + insertText.length;
+      textarea.selectionStart = textarea.selectionEnd = newCursorPos;
     }
   };
 
@@ -682,22 +708,78 @@ export default function EditWikiPageClient() {
                 )}
               </div>
               
-              {/* 本文 */}
+              {/* 本文 - タブ付きエディタに変更 */}
               <div className="mb-6">
                 <label htmlFor="content" className="block text-sm font-medium mb-2">
                   本文 *
                 </label>
-                <textarea
-                  id="content"
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="記事の本文をここに入力..."
-                  rows={10}
-                  className="w-full bg-white/10 border border-white/20 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  required
-                />
-                <p className="text-xs text-slate-400 mt-2">
-                  マークダウン記法が使用できます
+                
+                {/* タブ切り替えボタン */}
+                <div className="flex mb-2 border-b border-white/20">
+                  <button
+                    type="button"
+                    onClick={() => setEditorMode('raw')}
+                    className={`px-4 py-2 flex items-center text-sm font-medium transition-colors ${
+                      editorMode === 'raw' 
+                        ? 'text-purple-300 border-b-2 border-purple-500' 
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <FiCode className="mr-2" /> 編集
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditorMode('preview')}
+                    className={`px-4 py-2 flex items-center text-sm font-medium transition-colors ${
+                      editorMode === 'preview' 
+                        ? 'text-purple-300 border-b-2 border-purple-500' 
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <FiEye className="mr-2" /> プレビュー
+                  </button>
+                </div>
+                
+                {/* エディタとプレビューの切り替え */}
+                <div className="rounded-lg border border-white/20 bg-white/10">
+                  {editorMode === 'raw' && (
+                    <MarkdownToolbar 
+                      onInsert={handleInsertMarkdown}
+                      onImageClick={() => setShowImageUploader(true)}
+                    />
+                  )}
+                  {editorMode === 'raw' ? (
+                    <textarea
+                      id="content"
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
+                      placeholder="記事の本文をここに入力..."
+                      rows={15}
+                      className="w-full bg-transparent rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      required
+                    />
+                  ) : (
+                    <div className="p-4 min-h-[300px] max-h-[600px] overflow-y-auto">
+                      {content ? (
+                        <MarkdownPreview content={content} />
+                      ) : (
+                        <div className="text-slate-400 italic">プレビューする内容がありません。編集タブでコンテンツを入力してください。</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                
+                <p className="text-xs text-slate-400 mt-2 flex items-center">
+                  <span className="mr-1">マークダウン記法が使用できます</span>
+                  {editorMode === 'raw' && (
+                    <button 
+                      type="button" 
+                      onClick={() => setEditorMode('preview')} 
+                      className="text-blue-400 hover:text-blue-300 underline"
+                    >
+                      プレビューで確認
+                    </button>
+                  )}
                 </p>
               </div>
               

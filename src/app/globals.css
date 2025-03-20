@@ -38,13 +38,17 @@ body {
   height: 100dvh;
 }
 
-/* MDXコンテンツのスタイル */
+/* Markdownプレビューのスタイル改善 */
+.prose-invert {
+  @apply text-white/90;
+}
+
 .prose-invert h1 {
   @apply text-2xl font-bold mt-6 mb-4 text-white;
 }
 
 .prose-invert h2 {
-  @apply text-xl font-semibold mt-5 mb-3 text-white;
+  @apply text-xl font-semibold mt-5 mb-3 text-white border-b pb-1 border-white/20;
 }
 
 .prose-invert h3 {
@@ -91,6 +95,10 @@ body {
   @apply border border-white/20 p-2;
 }
 
+.prose-invert img {
+  @apply rounded-lg max-w-full mx-auto my-4;
+}
+
 /* 画像アップロードスタイル */
 .dropzone {
   border: 2px dashed rgba(255, 255, 255, 0.3);
@@ -113,4 +121,32 @@ body {
 
 .dropzone:hover {
   border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* ツールチップスタイル */
+.tooltip-trigger {
+  position: relative;
+}
+
+.tooltip-trigger::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.25rem 0.5rem;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  font-size: 0.75rem;
+  border-radius: 0.25rem;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+  pointer-events: none;
+}
+
+.tooltip-trigger:hover::after {
+  opacity: 1;
+  visibility: visible;
 }
