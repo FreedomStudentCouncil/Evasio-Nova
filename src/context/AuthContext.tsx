@@ -7,6 +7,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   isAdmin: boolean; // 管理者かどうかのフラグを追加
+  isEmailVerified: boolean; // 追加
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -17,6 +18,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isUserAdmin, setIsUserAdmin] = useState(false); // 管理者状態を追加
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
 
   // リダイレクト認証結果の処理とユーザー状態監視
   useEffect(() => {
@@ -33,6 +35,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(currentUser);
         // ユーザーのメールアドレスを使って管理者かどうかを判定
         setIsUserAdmin(currentUser ? isAdmin(currentUser.email) : false);
+        setIsEmailVerified(currentUser?.emailVerified ?? false); // 追加
         setLoading(false);
       });
 
@@ -64,6 +67,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     user,
     loading,
     isAdmin: isUserAdmin, // 管理者フラグを提供
+    isEmailVerified, // 追加
     signInWithGoogle,
     signOut
   };

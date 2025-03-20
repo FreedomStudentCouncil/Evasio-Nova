@@ -8,7 +8,9 @@ import {
   sendPasswordResetEmail,
   UserCredential,
   signInWithRedirect,
-  getRedirectResult as firebaseGetRedirectResult
+  getRedirectResult as firebaseGetRedirectResult,
+  sendEmailVerification,
+  applyActionCode
 } from 'firebase/auth';
 import { createOrUpdateUserProfile } from './user';
 import { auth } from './config';
@@ -43,10 +45,14 @@ export function isAdmin(email: string | null | undefined): boolean {
 export async function loginWithEmail(email: string, password: string): Promise<UserCredential> {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    // ログイン時にユーザープロフィールを更新
-    if (userCredential.user) {
-      await createOrUpdateUserProfile(userCredential.user);
+    
+    // メール認証が完了していない場合はエラーを投げる
+    if (userCredential.user && !userCredential.user.emailVerified) {
+      throw new Error('email-not-verified');
     }
+    
+    // ログイン時にユーザープロフィールを更新
+    await createOrUpdateUserProfile(userCredential.user);
     return userCredential;
   } catch (error) {
     console.error('メールログインエラー:', error);
@@ -69,6 +75,15 @@ export async function registerWithEmail(
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     
+    // 確認メールを送信
+    if (userCredential.user) {
+      const actionCodeSettings = {
+        url: `${process.env.NEXT_PUBLIC_APP_URL}/login?email=${email}`,
+        handleCodeInApp: false,
+      };
+      await sendEmailVerification(userCredential.user, actionCodeSettings);
+    }
+    
     // 表示名を設定
     if (displayName && userCredential.user) {
       await updateProfile(userCredential.user, { displayName });
@@ -87,6 +102,19 @@ export async function registerWithEmail(
 }
 
 /**
+ * メール認証を完了する
+ * @param code 認証コード
+ */
+export async function verifyEmail(code: string): Promise<void> {
+  try {
+    await applyActionCode(auth, code);
+  } catch (error) {
+    console.error('メール認証エラー:', error);
+    throw error;
+  }
+}
+
+/**
  * Googleでログインする（ポップアップ）
  * @returns ユーザー認証情報
  */
@@ -100,16 +128,19 @@ export async function loginWithGoogle(): Promise<UserCredential> {
     }
     
     return userCredential;
-  } catch (error: unknown) {  // ここを unknown に変更
+  } catch (error: unknown) {
     console.error('Googleログインエラー:', error);
     
-    // エラー内容の詳細をログに出力
-    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'auth/unauthorized-domain') {
-      console.error('未承認ドメインエラー: Firebase Consoleで現在のドメインを承認してください。');
-      console.error('承認が必要なドメイン:', window.location.origin);
-      console.error('対応方法: Firebase Console > Authentication > Settings > Authorized domains に以下を追加:');
-      console.error('- localhost');
-      console.error('- evasio-nova.onrender.com');
+    if (typeof error === 'object' && error !== null && 'code' in error) {
+      if (error.code === 'auth/unauthorized-domain') {
+        console.error('承認が必要なドメイン:', window.location.origin);
+        console.error('Firebase Console で以下の設定が必要:');
+        console.error('1. Authentication > Settings > Authorized domains:');
+        console.error('   - evasio-nova.onrender.com を追加');
+        console.error('2. Authentication > Sign-in method > Google:');
+        console.error('   - Web SDK configuration の承認済みドメインに');
+        console.error('   - evasio-nova.onrender.com を追加');
+      }
     }
     
     throw error;
@@ -121,6 +152,11 @@ export async function loginWithGoogle(): Promise<UserCredential> {
  */
 export async function loginWithGoogleRedirect(): Promise<void> {
   try {
+    // リダイレクトURLを設定
+    googleProvider.setCustomParameters({
+      redirect_uri: process.env.NEXT_PUBLIC_APP_URL || 'https://evasio-nova.onrender.com'
+    });
+    
     await signInWithRedirect(auth, googleProvider);
   } catch (error) {
     console.error('Googleリダイレクトログインエラー:', error);

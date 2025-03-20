@@ -13,7 +13,7 @@ import { db } from "../firebase/config";
 import { updateProfileImage } from "../firebase/user";
 
 export default function UserProfilePageClient() {
-  const { user } = useAuth();
+  const { user, isEmailVerified } = useAuth();
   const searchParams = useSearchParams();
   const userId = searchParams.get("id") || "";
   const [articles, setArticles] = useState<WikiArticle[]>([]);
@@ -137,6 +137,9 @@ export default function UserProfilePageClient() {
     );
   }
 
+  // プロフィール編集ボタンの表示条件を変更
+  const canEdit = isOwnProfile && isEmailVerified;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white">
       <div className="container mx-auto px-4 py-12">
@@ -235,6 +238,14 @@ export default function UserProfilePageClient() {
               )}
               {updateSuccess && (
                 <div className="mt-4 text-green-400 text-sm">{updateSuccess}</div>
+              )}
+              {isOwnProfile && !isEmailVerified && (
+                <div className="mt-4 bg-yellow-500/20 border border-yellow-500/40 rounded-lg p-4">
+                  <p className="text-yellow-200 text-sm">
+                    プロフィールを編集するには、メールアドレスの認証が必要です。
+                    メールボックスを確認して、認証を完了してください。
+                  </p>
+                </div>
               )}
             </div>
           </motion.div>

@@ -4,16 +4,22 @@ import { Fragment, useState } from 'react'
 interface TermsDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onAccept: () => void;
+  onAccept: () => Promise<void>; // Promise<void>に変更
 }
 
 export default function TermsDialog({ isOpen, onClose, onAccept }: TermsDialogProps) {
   const [isChecked, setIsChecked] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleAccept = () => {
-    if (isChecked) {
-      onAccept();
-      onClose();
+  const handleAccept = async () => {
+    if (isChecked && !isSubmitting) {
+      setIsSubmitting(true);
+      try {
+        await onAccept();
+        onClose();
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -95,11 +101,12 @@ export default function TermsDialog({ isOpen, onClose, onAccept }: TermsDialogPr
                   <button
                     type="button"
                     className={`inline-flex justify-center rounded-md border border-transparent px-4 py-2 text-sm font-medium text-white focus:outline-none
-                      ${isChecked ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-600/50 cursor-not-allowed'}`}
+                      ${isChecked ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-600/50 cursor-not-allowed'}
+                      ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                     onClick={handleAccept}
-                    disabled={!isChecked}
+                    disabled={!isChecked || isSubmitting}
                   >
-                    同意して登録
+                    {isSubmitting ? '処理中...' : '同意して登録'}
                   </button>
                 </div>
               </Dialog.Panel>
