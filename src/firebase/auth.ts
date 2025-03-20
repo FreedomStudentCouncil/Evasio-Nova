@@ -47,9 +47,11 @@ export async function loginWithEmail(email: string, password: string): Promise<U
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     
-    // メール認証が完了していない場合はエラーを投げる
+    // メール認証が完了していない場合は警告を設定するが、ログインは許可
     if (userCredential.user && !userCredential.user.emailVerified) {
-      throw new Error('email-not-verified');
+      console.warn('Email not verified');
+      // 認証メールを再送信
+      await resendVerificationEmail(userCredential.user);
     }
     
     // ログイン時にユーザープロフィールを更新
@@ -79,7 +81,9 @@ export async function registerWithEmail(
     // 確認メールを送信
     if (userCredential.user) {
       const actionCodeSettings = {
-        url: `${process.env.NEXT_PUBLIC_APP_URL}/login?email=${email}`,
+        url: process.env.NEXT_PUBLIC_APP_URL ? 
+          `${process.env.NEXT_PUBLIC_APP_URL}/login?email=${email}` : 
+          'http://localhost:3000/login',
         handleCodeInApp: false,
       };
       await sendEmailVerification(userCredential.user, actionCodeSettings);
@@ -108,7 +112,9 @@ export async function registerWithEmail(
 export async function resendVerificationEmail(user: User): Promise<void> {
   try {
     const actionCodeSettings = {
-      url: `${process.env.NEXT_PUBLIC_APP_URL}/login?email=${user.email}`,
+      url: process.env.NEXT_PUBLIC_APP_URL ? 
+        `${process.env.NEXT_PUBLIC_APP_URL}/wiki/user?id=${user.uid}` : // プロフィールページに直接リダイレクト
+        'http://localhost:3000/wiki/user?id=' + user.uid,
       handleCodeInApp: false,
     };
     await sendEmailVerification(user, actionCodeSettings);
