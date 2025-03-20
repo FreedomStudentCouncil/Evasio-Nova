@@ -12,8 +12,8 @@ import { ArticleSummary } from "../../types/wiki";
 export default function WikiPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<"usefulCount" | "likeCount" | "date">("usefulCount");
-  const { user } = useAuth();
+  const [sortBy, setSortBy] = useState<"articleScore" | "usefulCount" | "likeCount" | "date">("articleScore");
+  const { user, isAdmin } = useAuth(); // isAdmin を追加
   const [wikiArticles, setWikiArticles] = useState<WikiArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -49,19 +49,19 @@ export default function WikiPage() {
     }
   };
 
-  // Firestoreからデータを取得
+  // Firestoreからデータを取得（キャッシュを最大限活用）
   useEffect(() => {
     const fetchArticles = async () => {
       try {
         setLoading(true);
-        let articles: WikiArticle[] = [];
-
-        // まずキャッシュからデータを取得
+        
+        // まずキャッシュからデータを取得を試みる
         try {
           const cachedSummaries = await cacheManager.getArticleSummaries();
+          
           if (cachedSummaries.length > 0) {
             // キャッシュされた記事概要を直接使用
-            articles = cachedSummaries.map(summary => ({
+            const articles = cachedSummaries.map(summary => ({
               id: summary.id,
               title: summary.title,
               description: summary.description,
@@ -73,45 +73,55 @@ export default function WikiPage() {
               date: summary.date,
               lastUpdated: summary.lastUpdated,
               usefulCount: summary.usefulCount,
-              likeCount: summary.likeCount
-            }));
+              likeCount: summary.likeCount,
+              articleScore: summary.articleScore
+            } as WikiArticle));
+            
             setWikiArticles(articles);
             setAllTags(Array.from(new Set(articles.flatMap(article => article.tags || []))));
+            
+            // キャッシュからデータを取得できた場合は処理を終了
+            console.log("キャッシュから記事を使用しました");
             setLoading(false);
+            
+            // 著者のプロフィールも取得しておく
+            const authorIds = new Set(articles.map(article => article.authorId).filter(Boolean));
+            for (const userId of authorIds) {
+              await fetchUserProfile(userId as string);
+            }
+            
+            return;
           }
         } catch (cacheError) {
           console.warn("キャッシュの読み込みに失敗:", cacheError);
         }
 
-        // キャッシュがない場合はsearchDBから取得
-        if (articles.length === 0) {
-          try {
-            const summaries = await getAllArticleSummaries(sortBy);
-            articles = summaries.map(summary => ({
-              id: summary.id,
-              title: summary.title,
-              description: summary.description,
-              content: '', // 記事概要にはcontentは含まれていないので空文字を設定
-              tags: summary.tags,
-              author: summary.author,
-              authorId: summary.authorId,
-              imageUrl: summary.imageUrl,
-              date: summary.date,
-              lastUpdated: summary.lastUpdated,
-              usefulCount: summary.usefulCount,
-              likeCount: summary.likeCount
-            } as WikiArticle));
-            setWikiArticles(articles);
-            setAllTags(Array.from(new Set(articles.flatMap(article => article.tags || []))));
-
-            // キャッシュを更新
-            await cacheManager.saveArticleSummaries(summaries);
-          } catch (searchDbError) {
-            console.error("検索用DBからの記事取得に失敗:", searchDbError);
-          }
-        }
-
-        // 著者のプロフィールを取得（メインDB）
+        // キャッシュがない場合やエラーの場合はsearchDBから取得
+        console.log(`searchDBから記事を取得: sortBy=${sortBy}`);
+        const summaries = await getAllArticleSummaries(sortBy);
+        const articles = summaries.map(summary => ({
+          id: summary.id,
+          title: summary.title,
+          description: summary.description,
+          content: '', // 記事概要にはcontentは含まれていないので空文字を設定
+          tags: summary.tags,
+          author: summary.author,
+          authorId: summary.authorId,
+          imageUrl: summary.imageUrl,
+          date: summary.date,
+          lastUpdated: summary.lastUpdated,
+          usefulCount: summary.usefulCount,
+          likeCount: summary.likeCount,
+          articleScore: summary.articleScore
+        } as WikiArticle));
+        
+        setWikiArticles(articles);
+        setAllTags(Array.from(new Set(articles.flatMap(article => article.tags || []))));
+        
+        // キャッシュを更新
+        await cacheManager.saveArticleSummaries(summaries);
+        
+        // 著者のプロフィールを取得
         const authorIds = new Set(articles.map(article => article.authorId).filter(Boolean));
         for (const userId of authorIds) {
           await fetchUserProfile(userId as string);
@@ -181,6 +191,7 @@ export default function WikiPage() {
       
       return matchesSearch && matchesTags;
     })
+    // フィルタリングしたら改めてソート
     .sort((a, b) => {
       if (sortBy === "date") {
         // 日付型とタイムスタンプの両方に対応
@@ -190,7 +201,11 @@ export default function WikiPage() {
         if (!dateA || !dateB) return 0;
         return dateB.getTime() - dateA.getTime();
       }
-      return (b[sortBy] || 0) - (a[sortBy] || 0);
+      
+      // 数値ソート（articleScore, usefulCount, likeCount）
+      const valueA = a[sortBy] || 0;
+      const valueB = b[sortBy] || 0;
+      return valueB - valueA;
     });
 
   // ページネーション用の記事を取得
@@ -221,11 +236,11 @@ export default function WikiPage() {
     }
   };
   
-  // ソート方法変更時の処理
-  const handleSortChange = (newSortBy: "usefulCount" | "likeCount" | "date") => {
+  // ソート方法変更時の処理を簡略化（キャッシュデータのクライアントサイドソートを活用）
+  const handleSortChange = (newSortBy: "articleScore" | "usefulCount" | "likeCount" | "date") => {
     setSortBy(newSortBy);
-    // サーバーから再取得する場合はコメント解除
-    // setLoading(true);
+    // クライアントサイドでソートするので、セットだけでOK
+    // setLoading(true); <- これは不要
   };
   
   if (loading) {
@@ -291,9 +306,10 @@ export default function WikiPage() {
             <div className="flex gap-2">
               <select
                 value={sortBy}
-                onChange={(e) => handleSortChange(e.target.value as "usefulCount" | "likeCount" | "date")}
+                onChange={(e) => handleSortChange(e.target.value as "articleScore" | "usefulCount" | "likeCount" | "date")}
                 className="bg-white/10 border border-white/20 rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
+                <option value="articleScore">評価値順</option>
                 <option value="usefulCount">使えた！順</option>
                 <option value="likeCount">いいね順</option>
                 <option value="date">新着順</option>

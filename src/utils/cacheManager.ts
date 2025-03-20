@@ -176,13 +176,25 @@ export class CacheManager {
     });
   }
 
-  // 特定の記事のカウント情報を更新
-  async updateArticleCount(articleId: string, likeCount: number, usefulCount: number): Promise<void> {
+  /**
+   * 特定の記事のカウント情報を更新
+   * @param articleId 記事ID
+   * @param likeCount いいね数
+   * @param usefulCount 役に立った数
+   * @param articleScore 記事スコア（オプション）
+   * @returns 更新が完了したPromise
+   */
+  async updateArticleCount(
+    articleId: string, 
+    likeCount: number, 
+    usefulCount: number,
+    articleScore?: number
+  ): Promise<void> {
     if (!this.db) await this.initDB();
     if (!this.db) throw new Error('データベースの初期化に失敗しました');
 
     try {
-      // 現在のカウント情報を取得
+      // countsコレクションの更新
       let counts = await this.getArticleCounts();
       
       if (!counts) {
@@ -200,8 +212,30 @@ export class CacheManager {
         usefulCount
       };
       
-      // 保存
+      // カウントを保存
       await this.saveArticleCounts(counts);
+      
+      // 記事概要のキャッシュも更新（articleScoreも含む）
+      const transaction = this.db!.transaction(STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const getReq = store.get(articleId);
+      
+      getReq.onsuccess = () => {
+        const summary = getReq.result;
+        if (summary) {
+          summary.likeCount = likeCount;
+          summary.usefulCount = usefulCount;
+          if (articleScore !== undefined) {
+            summary.articleScore = articleScore;
+          }
+          store.put(summary);
+        }
+      };
+      
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
     } catch (error) {
       console.error('記事カウントの更新に失敗:', error);
       throw error;

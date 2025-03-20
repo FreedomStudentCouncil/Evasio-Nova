@@ -20,7 +20,7 @@ service cloud.firestore {
       // 評価カウントの更新は誰でも可能
       // 認証情報が共有されないため、メインDBでの権限チェックに依存する
       allow update: if 
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usefulCount', 'likeCount', 'dislikeCount'])) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usefulCount', 'likeCount', 'dislikeCount', 'articleScore'])) ||
         (request.resource.data.authorId == resource.data.authorId &&
          request.resource.data.tags is list &&
          request.resource.data.tags.size() > 0 &&

@@ -13,7 +13,8 @@ import {
   FiCheckCircle,
   FiThumbsDown, // 低評価アイコン
   FiTrash2, // 削除アイコン
-  FiAlertTriangle // 警告アイコン
+  FiAlertTriangle, // 警告アイコン
+  FiAward // スコア表示用アイコン
 } from "react-icons/fi";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -25,7 +26,7 @@ import {
   incrementDislikeCount, // 新しい関数
   deleteArticle, // 記事削除関数
   WikiArticle,
-  getArticleCountById
+  getArticleCountById // 大文字小文字の修正（IdではなくById）
 } from "../firebase/wiki";
 import { useAuth } from "../context/AuthContext";
 import WikiComments from "./WikiComments";
@@ -341,6 +342,25 @@ export default function WikiArticleContent() {
         
         <h1 className="text-2xl lg:text-3xl font-bold mb-3">{article.title}</h1>
         
+        {/* 記事スコアの表示 - 管理者のみに表示 */}
+        {isAdmin && article.articleScore !== undefined && (
+          <div className="mb-4 flex items-center">
+            <FiAward className="text-yellow-400 mr-2" />
+            <div className="flex-1">
+              <div className="bg-blue-900/30 rounded-full h-2 w-full">
+                <div 
+                  className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full" 
+                  style={{ width: `${Math.min(100, article.articleScore)}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between text-xs text-slate-400 mt-1">
+                <span>記事スコア (管理者のみ表示)</span>
+                <span>{article.articleScore}/100</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="flex flex-wrap gap-2 mb-6">
           {article.tags && article.tags.map(tag => (
             <Link href={`/wiki?tag=${tag}`} key={tag}>
@@ -423,30 +443,39 @@ export default function WikiArticleContent() {
           </div>
           
           <div className="flex gap-3">
-            {/* 管理者用低評価ボタン */}
+            {/* 管理者用評価情報とボタン */}
             {isAdmin && (
-              <button
-                type="button"
-                onClick={handleDislike}
-                disabled={dislikedByUser}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                  dislikedByUser 
-                    ? 'bg-gray-500/40 text-gray-300 cursor-default' 
-                    : 'bg-gray-500/20 hover:bg-gray-500/30 text-gray-400'
-                }`}
-              >
-                <motion.div
-                  whileHover={!dislikedByUser ? { scale: 1.05 } : {}}
-                  whileTap={!dislikedByUser ? { scale: 0.95 } : {}}
-                  className="flex items-center gap-2"
+              <div className="flex gap-3 items-center">
+                {/* 低評価ボタン */}
+                <button
+                  type="button"
+                  onClick={handleDislike}
+                  disabled={dislikedByUser}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                    dislikedByUser 
+                      ? 'bg-gray-500/40 text-gray-300 cursor-default' 
+                      : 'bg-gray-500/20 hover:bg-gray-500/30 text-gray-400'
+                  }`}
                 >
-                  <FiThumbsDown />
-                  <span>低評価</span>
-                  <span className="bg-white/10 px-2 py-0.5 rounded-full text-sm">
-                    {counts.dislikeCount || 0}
-                  </span>
-                </motion.div>
-              </button>
+                  <motion.div
+                    whileHover={!dislikedByUser ? { scale: 1.05 } : {}}
+                    whileTap={!dislikedByUser ? { scale: 0.95 } : {}}
+                    className="flex items-center gap-2"
+                  >
+                    <FiThumbsDown />
+                    <span>低評価</span>
+                    <span className="bg-white/10 px-2 py-0.5 rounded-full text-sm">
+                      {counts.dislikeCount || 0}
+                    </span>
+                  </motion.div>
+                </button>
+                
+                {/* 評価値表示 - 管理者のみ */}
+                <div className="flex items-center px-4 py-2 bg-blue-900/30 text-blue-300 rounded-lg">
+                  <FiAward className="mr-2" />
+                  <span>評価値: {article.articleScore || 0}/100</span>
+                </div>
+              </div>
             )}
             
             {/* 「使えた！」ボタン */}

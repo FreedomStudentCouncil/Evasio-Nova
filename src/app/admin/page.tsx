@@ -145,6 +145,7 @@ export default function AdminDashboard() {
                     <th className="p-4 text-left">タイトル</th>
                     <th className="p-4 text-left">作成者</th>
                     <th className="p-4 text-center">低評価数</th>
+                    <th className="p-4 text-center">評価値</th>
                     <th className="p-4 text-center">操作</th>
                   </tr>
                 </thead>
@@ -161,6 +162,11 @@ export default function AdminDashboard() {
                         <td className="p-4 text-center">
                           <span className="inline-block bg-red-500/20 text-red-300 px-2 py-1 rounded-full">
                             {article.dislikeCount || 0}
+                          </span>
+                        </td>
+                        <td className="p-4 text-center">
+                          <span className="inline-block bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full">
+                            {article.articleScore || 0}/100
                           </span>
                         </td>
                         <td className="p-4 flex justify-center gap-2">
@@ -185,7 +191,7 @@ export default function AdminDashboard() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={4} className="p-8 text-center text-slate-400">
+                      <td colSpan={5} className="p-8 text-center text-slate-400">
                         低評価の記事はありません
                       </td>
                     </tr>

@@ -13,6 +13,7 @@ export interface ArticleSummary {
   usefulCount: number;
   likeCount: number;
   dislikeCount?: number; // 管理者のみが見える低評価カウント
+  articleScore?: number; // 記事の品質スコア
 }
 
 // WikiArticleインターフェースも追加
@@ -32,4 +33,5 @@ export interface WikiArticle {
   likeCount: number;
   dislikeCount?: number; // 管理者のみが見える低評価カウント
   deleteUrl?: string;
+  articleScore?: number; // 記事の品質スコア
 }
