@@ -86,8 +86,8 @@ service cloud.firestore {
 
     // システム情報のルール（修正）
     match /info/{docId} {
-      // 認証済みユーザーのみがアクセス可能
-      allow read, write:, update if true;
+      // すべてのユーザーが通知情報にアクセス可能
+      allow read, write: if true;
     }
   }
 }

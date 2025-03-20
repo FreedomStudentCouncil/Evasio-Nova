@@ -46,12 +46,19 @@ export async function addNotification(notification: Omit<Notification, 'id' | 'c
     } else {
       // 既存の通知に追加
       const userData = notificationDoc.data()?.notifications?.[notification.userId];
+      
       if (userData) {
+        // 既存のユーザーデータがある場合
+        // arrayUnionは使わず、現在の配列に追加して更新
+        const currentItems = userData.items || [];
+        const updatedItems = [...currentItems, newNotification];
+        
         await updateDoc(notificationsRef, {
-          [`notifications.${notification.userId}.items`]: arrayUnion(newNotification),
+          [`notifications.${notification.userId}.items`]: updatedItems,
           [`notifications.${notification.userId}.unreadCount`]: increment(1)
         });
       } else {
+        // ユーザーのデータがまだない場合は新しく作成
         await updateDoc(notificationsRef, {
           [`notifications.${notification.userId}`]: {
             items: [newNotification],
@@ -60,8 +67,15 @@ export async function addNotification(notification: Omit<Notification, 'id' | 'c
         });
       }
     }
+    
+    console.log("通知を追加しました:", newNotification);
   } catch (error) {
     console.error('通知の追加に失敗:', error);
+    // エラーの詳細をログに出力
+    if (error instanceof Error) {
+      console.error('エラーメッセージ:', error.message);
+      console.error('エラースタック:', error.stack);
+    }
     throw error;
   }
 }

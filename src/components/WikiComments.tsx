@@ -194,6 +194,10 @@ export default function WikiComments({ articleId, user, articleTitle, articleAut
     setSubmittingComment(true);
     
     try {
+      // 親コメント情報を取得して、コメント投稿者IDを特定
+      const parentComment = comments.find(comment => comment.id === parentId);
+      const parentCommentAuthorId = parentComment?.authorId;
+
       const replyId = await addReply(
         articleId,
         parentId,
@@ -205,10 +209,25 @@ export default function WikiComments({ articleId, user, articleTitle, articleAut
         }
       );
 
-      // 記事の著者に通知を送信（自分の記事への返信は通知しない）
+      // 1. 記事の著者に通知を送信（自分の記事への返信は通知しない）
       if (user && articleAuthorId && user.uid !== articleAuthorId) {
         await addNotification({
           userId: articleAuthorId,
+          type: 'reply',
+          articleId,
+          articleTitle,
+          senderId: user.uid,
+          senderName: user.displayName || "匿名ユーザー",
+          content: replyText.trim()
+        });
+      }
+      
+      // 2. 親コメントの投稿者にも通知（自分のコメントへの返信は通知しない）
+      if (user && parentCommentAuthorId && 
+          user.uid !== parentCommentAuthorId && 
+          parentCommentAuthorId !== articleAuthorId) { // 記事著者でない場合のみ（重複通知防止）
+        await addNotification({
+          userId: parentCommentAuthorId,
           type: 'reply',
           articleId,
           articleTitle,
@@ -265,6 +284,22 @@ export default function WikiComments({ articleId, user, articleTitle, articleAut
     try {
       await incrementCommentLikeCount(articleId, commentId);
       
+      // いいねされたコメントの情報を取得
+      const likedComment = comments.find(c => c.id === commentId);
+      
+      // コメント投稿者に通知を送信（自分のコメントへのいいねは通知しない）
+      if (user && likedComment?.authorId && user.uid !== likedComment.authorId) {
+        await addNotification({
+          userId: likedComment.authorId,
+          type: 'like',
+          articleId,
+          articleTitle,
+          senderId: user.uid,
+          senderName: user.displayName || "匿名ユーザー",
+          content: `${likedComment.content.slice(0, 30)}${likedComment.content.length > 30 ? '...' : ''}`
+        });
+      }
+      
       // ローカルストレージに保存して二重いいねを防止
       const updatedLikedComments = Array.from(likedComments);
       updatedLikedComments.push(commentId);
@@ -301,6 +336,23 @@ export default function WikiComments({ articleId, user, articleTitle, articleAut
     
     try {
       await incrementReplyLikeCount(articleId, commentId, replyId);
+      
+      // いいねされた返信の情報を取得
+      const replies = commentReplies[commentId] || [];
+      const likedReply = replies.find(r => r.id === replyId);
+      
+      // 返信投稿者に通知を送信（自分の返信へのいいねは通知しない）
+      if (user && likedReply?.authorId && user.uid !== likedReply.authorId) {
+        await addNotification({
+          userId: likedReply.authorId,
+          type: 'like',
+          articleId,
+          articleTitle,
+          senderId: user.uid,
+          senderName: user.displayName || "匿名ユーザー",
+          content: `${likedReply.content.slice(0, 30)}${likedReply.content.length > 30 ? '...' : ''}`
+        });
+      }
       
       // ローカルストレージに保存して二重いいねを防止
       const updatedLikedComments = Array.from(likedComments);
