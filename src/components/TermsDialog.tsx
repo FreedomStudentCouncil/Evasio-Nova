@@ -63,6 +63,11 @@ export default function TermsDialog({ isOpen, onClose, onAccept }: TermsDialogPr
                     <h4 className="font-bold mb-2">3. アカウント管理</h4>
                     <p className="mb-4">・アカウント情報の管理は利用者の責任で行ってください。<br/>
                     ・不正アクセスが発覚した場合は、直ちに報告してください。</p>
+
+                    <h4 className="font-bold mb-2">3. 管理</h4>
+                    <p className="mb-4">
+                    ・趣旨に不適当な記事・嘘の情報は、管理者によって無許可に編集または削除されます。<br/>
+                    ・管理者には全ての記事の編集・削除の権限があります。</p>
                   </div>
                   
                   <div className="flex items-center mb-4">
