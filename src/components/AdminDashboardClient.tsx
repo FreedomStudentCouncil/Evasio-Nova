@@ -8,19 +8,7 @@ import {
 } from "react-icons/fi";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
-
-// 結果の型定義を追加
-interface RecalculationResult {
-  success: boolean;
-  processed: number;
-  errors: number;
-  results: Array<{
-    id: string;
-    title: string;
-    oldScore: number;
-    newScore: number;
-  }>;
-}
+import { RecalculationResult } from "../types/wiki";
 
 export default function AdminDashboardClient() {
   const router = useRouter();
@@ -80,7 +68,7 @@ export default function AdminDashboardClient() {
         throw new Error('認証トークンを取得できませんでした');
       }
       
-      // APIエンドポイントを決定
+      // APIエンドポイントを決定 - それぞれでarticleScoreCalculatorを使用
       let endpoint = '/api/admin/recalculate-scores';
       if (recalculationType === 'trophies') {
         endpoint = '/api/admin/recalculate-trophies';

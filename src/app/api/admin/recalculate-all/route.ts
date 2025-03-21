@@ -103,7 +103,7 @@ async function recalculateArticleScores() {
       
       const mainArticleData = mainArticleSnap.data();
       
-      // スコアを計算
+      // スコアを計算 - articleScoreCalculatorを使用
       const newScore = calculateArticleScore(
         mainArticleData.content,
         article.likeCount || 0,
