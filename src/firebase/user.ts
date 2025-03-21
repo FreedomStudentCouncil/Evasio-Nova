@@ -11,6 +11,7 @@ export interface UserProfile {
   joinedAt: Date | string;
   lastLoginAt: Date | string;
   profileImage?: string; // base64エンコードされた画像データ
+  selectedBadge?: string; // 選択されたバッジID
 }
 
 // カスタムエラー型の定義
@@ -284,5 +285,61 @@ export async function updateUsername(uid: string, oldUsername: string, newUserna
   } catch (error) {
     console.error('ユーザー名更新エラー:', error);
     throw error;
+  }
+}
+
+/**
+ * ユーザーの自己紹介を更新する
+ * @param uid ユーザーID
+ * @param bio 新しい自己紹介文
+ */
+export async function updateUserBio(uid: string, bio: string): Promise<void> {
+  try {
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, {
+      bio
+    });
+  } catch (error) {
+    console.error('自己紹介更新エラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * ユーザーのバッジを更新する
+ * @param uid ユーザーID
+ * @param badgeId バッジID
+ */
+export async function updateUserBadge(uid: string, badgeId: string | null): Promise<void> {
+  try {
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, {
+      selectedBadge: badgeId
+    });
+  } catch (error) {
+    console.error('バッジ更新エラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * ユーザーが管理者かどうかを確認する
+ * @param email ユーザーのメールアドレス
+ * @returns 管理者かどうか
+ */
+export async function isAdminEmail(email: string): Promise<boolean> {
+  try {
+    // あらかじめ許可された管理者メールアドレスのリストを取得
+    const adminRef = doc(db, 'info', 'admins');
+    const adminDoc = await getDoc(adminRef);
+    
+    if (adminDoc.exists()) {
+      const adminList = adminDoc.data().emails || [];
+      return adminList.includes(email);
+    }
+    return false;
+  } catch (error) {
+    console.error('管理者確認エラー:', error);
+    return false;
   }
 }

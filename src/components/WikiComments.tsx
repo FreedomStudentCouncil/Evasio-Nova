@@ -181,7 +181,8 @@ export default function WikiComments({ articleId, user, articleTitle, articleAut
             articleTitle,
             senderId: user.uid,
             senderName: user.displayName || "匿名ユーザー",
-            content: commentText.trim()
+            content: commentText.trim(),
+            date: new Date() // dateプロパティを追加
           });
           
           console.log('コメント通知送信完了');
@@ -243,7 +244,8 @@ export default function WikiComments({ articleId, user, articleTitle, articleAut
             articleTitle,
             senderId: user.uid,
             senderName: user.displayName || "匿名ユーザー",
-            content: replyText.trim()
+            content: replyText.trim(),
+            date: new Date() // dateプロパティを追加
           });
           
           console.log(`${recipientId}への通知送信完了`);
@@ -330,7 +332,8 @@ export default function WikiComments({ articleId, user, articleTitle, articleAut
             articleTitle,
             senderId: user.uid,
             senderName: user.displayName || "匿名ユーザー",
-            content: `${likedComment.content.slice(0, 30)}${likedComment.content.length > 30 ? '...' : ''}`
+            content: `${likedComment.content.slice(0, 30)}${likedComment.content.length > 30 ? '...' : ''}`,
+            date: new Date() // dateプロパティを追加
           });
           
           console.log('いいね通知送信完了');
@@ -398,7 +401,8 @@ export default function WikiComments({ articleId, user, articleTitle, articleAut
             articleTitle,
             senderId: user.uid,
             senderName: user.displayName || "匿名ユーザー",
-            content: `${likedReply.content.slice(0, 30)}${likedReply.content.length > 30 ? '...' : ''}`
+            content: `${likedReply.content.slice(0, 30)}${likedReply.content.length > 30 ? '...' : ''}`,
+            date: new Date() // dateプロパティを追加
           });
           
           console.log('いいね通知送信完了');

@@ -254,6 +254,9 @@ export async function createArticle(article: Omit<WikiArticle, 'id'>): Promise<s
         articleScore // 記事スコアを追加
       });
       console.log("検索用DBへの保存完了");
+      
+      // 3. 著者のスコア情報を更新
+      await updateAuthorScoreOnArticleCreate(article.authorId, articleScore);
     } catch (searchDbError) {
       console.error("検索用DB保存エラー:", searchDbError);
       
@@ -524,11 +527,21 @@ export async function incrementUsefulCount(id: string): Promise<void> {
     if (authorCountsDoc.exists()) {
       const authorData = authorCountsDoc.data();
       const authorCounts = authorData.counts || {};
-      const currentAuthorCount = authorCounts[authorId] || { likeCount: 0, usefulCount: 0 };
+      const currentAuthorCount = authorCounts[authorId] || { 
+        likeCount: 0, 
+        usefulCount: 0,
+        articleScoreSum: 0,
+        articleCount: 0
+      };
+
+      // 記事のスコアを取得
+      const articleSummary = await getDoc(articleSummaryRef);
+      const articleScore = articleSummary.exists() ? (articleSummary.data().articleScore || 0) : 0;
 
       authorCounts[authorId] = {
         ...currentAuthorCount,
-        usefulCount: currentAuthorCount.usefulCount + 1
+        usefulCount: currentAuthorCount.usefulCount + 1,
+        // スコアは変わらないのでそのまま
       };
 
       await setDoc(authorCountsRef, {
@@ -536,9 +549,18 @@ export async function incrementUsefulCount(id: string): Promise<void> {
         lastUpdated: Date.now()
       }, { merge: true });
     } else {
+      // スコアの初期設定
+      const articleSummary = await getDoc(articleSummaryRef);
+      const articleScore = articleSummary.exists() ? (articleSummary.data().articleScore || 0) : 0;
+
       await setDoc(authorCountsRef, {
         counts: {
-          [authorId]: { likeCount: 0, usefulCount: 1 }
+          [authorId]: { 
+            likeCount: 0, 
+            usefulCount: 1,
+            articleScoreSum: articleScore,
+            articleCount: 1
+          }
         },
         lastUpdated: Date.now()
       });
@@ -644,11 +666,21 @@ export async function incrementLikeCount(id: string): Promise<void> {
     if (authorCountsDoc.exists()) {
       const authorData = authorCountsDoc.data();
       const authorCounts = authorData.counts || {};
-      const currentAuthorCount = authorCounts[authorId] || { likeCount: 0, usefulCount: 0 };
+      const currentAuthorCount = authorCounts[authorId] || { 
+        likeCount: 0, 
+        usefulCount: 0,
+        articleScoreSum: 0,
+        articleCount: 0 
+      };
+
+      // 記事のスコアを取得
+      const articleSummary = await getDoc(articleSummaryRef);
+      const articleScore = articleSummary.exists() ? (articleSummary.data().articleScore || 0) : 0;
 
       authorCounts[authorId] = {
         ...currentAuthorCount,
-        likeCount: currentAuthorCount.likeCount + 1
+        likeCount: currentAuthorCount.likeCount + 1,
+        // スコアは変わらないのでそのまま
       };
 
       await setDoc(authorCountsRef, {
@@ -656,9 +688,18 @@ export async function incrementLikeCount(id: string): Promise<void> {
         lastUpdated: Date.now()
       }, { merge: true });
     } else {
+      // スコアの初期設定
+      const articleSummary = await getDoc(articleSummaryRef);
+      const articleScore = articleSummary.exists() ? (articleSummary.data().articleScore || 0) : 0;
+
       await setDoc(authorCountsRef, {
         counts: {
-          [authorId]: { likeCount: 1, usefulCount: 0 }
+          [authorId]: { 
+            likeCount: 1, 
+            usefulCount: 0,
+            articleScoreSum: articleScore,
+            articleCount: 1
+          }
         },
         lastUpdated: Date.now()
       });
@@ -1095,18 +1136,88 @@ export async function getAuthorCounts(): Promise<{ [authorId: string]: { likeCou
 }
 
 // 新しい関数: 特定の著者のカウント情報を取得
-export async function getAuthorCountById(authorId: string): Promise<{ likeCount: number; usefulCount: number }> {
+export async function getAuthorCountById(authorId: string): Promise<{ 
+  likeCount: number; 
+  usefulCount: number;
+  articleScoreSum?: number;
+  articleCount?: number;
+  averageScore?: number; // 平均スコアを追加
+}> {
   try {
     const authorCountsRef = doc(searchDb, 'counts', 'author');
     const countsDoc = await getDoc(authorCountsRef);
 
     if (countsDoc.exists()) {
       const data = countsDoc.data();
-      return data.counts?.[authorId] || { likeCount: 0, usefulCount: 0 };
+      const authorData = data.counts?.[authorId] || { 
+        likeCount: 0, 
+        usefulCount: 0, 
+        articleScoreSum: 0, 
+        articleCount: 0 
+      };
+      
+      // 平均スコアを計算して追加
+      const averageScore = authorData.articleCount > 0 
+        ? authorData.articleScoreSum / authorData.articleCount 
+        : 0;
+        
+      return {
+        ...authorData,
+        averageScore
+      };
     }
-    return { likeCount: 0, usefulCount: 0 };
+    return { likeCount: 0, usefulCount: 0, articleScoreSum: 0, articleCount: 0, averageScore: 0 };
   } catch (error) {
     console.error('著者カウント情報の取得に失敗:', error);
-    return { likeCount: 0, usefulCount: 0 };
+    return { likeCount: 0, usefulCount: 0, articleScoreSum: 0, articleCount: 0, averageScore: 0 };
+  }
+}
+
+/**
+ * 記事作成時に著者のスコアを更新する
+ * @param authorId 著者ID
+ * @param articleScore 記事スコア
+ */
+export async function updateAuthorScoreOnArticleCreate(authorId: string, articleScore: number): Promise<void> {
+  try {
+    const authorCountsRef = doc(searchDb, 'counts', 'author');
+    const authorCountsDoc = await getDoc(authorCountsRef);
+
+    if (authorCountsDoc.exists()) {
+      const authorData = authorCountsDoc.data();
+      const authorCounts = authorData.counts || {};
+      const currentAuthorCount = authorCounts[authorId] || { 
+        likeCount: 0, 
+        usefulCount: 0, 
+        articleScoreSum: 0, 
+        articleCount: 0 
+      };
+
+      authorCounts[authorId] = {
+        ...currentAuthorCount,
+        articleScoreSum: currentAuthorCount.articleScoreSum + articleScore,
+        articleCount: currentAuthorCount.articleCount + 1
+      };
+
+      await setDoc(authorCountsRef, {
+        counts: authorCounts,
+        lastUpdated: Date.now()
+      }, { merge: true });
+    } else {
+      await setDoc(authorCountsRef, {
+        counts: {
+          [authorId]: { 
+            likeCount: 0, 
+            usefulCount: 0,
+            articleScoreSum: articleScore,
+            articleCount: 1
+          }
+        },
+        lastUpdated: Date.now()
+      });
+    }
+  } catch (error) {
+    console.error('著者スコア更新エラー:', error);
+    throw error;
   }
 }

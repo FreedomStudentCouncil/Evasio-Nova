@@ -5,10 +5,16 @@ import {
   updateDoc,
   Timestamp,
   increment,
-  limit
+  limit,
+  collection,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  getDocs
 } from 'firebase/firestore';
 import { db } from './config';
-import { Notification, NotificationResponse } from '../types/notification';
+import { NotificationType, Notification, NotificationResponse } from '../types/notification';
 
 const INFO_COLLECTION = 'info';
 const NOTIFICATIONS_DOC = 'notifications';
@@ -18,7 +24,7 @@ const MAX_NOTIFICATIONS = 20; // 1ユーザーあたりの最大通知数
 const DEBUG = true;
 
 // 通知を追加
-export async function addNotification(notification: Omit<Notification, 'id' | 'createdAt' | 'read'>): Promise<void> {
+export async function addNotification(notification: Omit<Notification, 'id' | 'createdAt' | 'isRead' | 'read'>): Promise<void> {
   if (DEBUG) console.log('通知追加開始:', notification);
 
   try {
@@ -26,10 +32,11 @@ export async function addNotification(notification: Omit<Notification, 'id' | 'c
     const notificationDoc = await getDoc(notificationsRef);
     
     // 新しい通知オブジェクトを作成
-    const newNotification: Notification = {
+    const newNotification = {
       ...notification,
       id: crypto.randomUUID(),
       createdAt: Timestamp.now(),
+      isRead: false,
       read: false
     };
     
@@ -141,9 +148,9 @@ export async function markNotificationAsRead(userId: string, notificationId: str
     let decrementCount = 0;
 
     const updatedItems = items.map((item: Notification) => {
-      if (item.id === notificationId && !item.read) {
+      if (item.id === notificationId && !(item.isRead || item.read)) {
         decrementCount = 1;
-        return { ...item, read: true };
+        return { ...item, isRead: true, read: true };
       }
       return item;
     });
@@ -173,6 +180,7 @@ export async function markAllNotificationsAsRead(userId: string): Promise<void> 
 
     const updatedItems = (userData.items || []).map((item: Notification) => ({
       ...item,
+      isRead: true,
       read: true
     }));
 
@@ -211,7 +219,7 @@ export async function pruneOldNotifications(userId: string): Promise<void> {
     }).slice(0, MAX_NOTIFICATIONS);
     
     // 未読カウントを再計算
-    const newUnreadCount = sortedItems.filter(item => !item.read).length;
+    const newUnreadCount = sortedItems.filter(item => !(item.isRead || item.read)).length;
     
     await updateDoc(notificationsRef, {
       [`notifications.${userId}.items`]: sortedItems,
@@ -221,5 +229,75 @@ export async function pruneOldNotifications(userId: string): Promise<void> {
     if (DEBUG) console.log(`古い通知を整理しました: ${userId} (${items.length} -> ${sortedItems.length}件)`);
   } catch (error) {
     console.error('古い通知の整理に失敗:', error);
+  }
+}
+
+/**
+ * バッジ獲得の通知を送る
+ * @param userId ユーザーID 
+ * @param badgeId バッジID
+ * @param badgeName バッジ名
+ */
+export async function sendBadgeNotification(
+  userId: string,
+  badgeId: string,
+  badgeName: string
+): Promise<void> {
+  try {
+    await addNotification({
+      userId,
+      type: 'badge', 
+      badgeId,
+      badgeName,
+      date: new Date()
+    });
+  } catch (error) {
+    console.error('バッジ通知追加エラー:', error);
+  }
+}
+
+/**
+ * トロフィー獲得の通知を送る
+ * @param userId ユーザーID
+ * @param trophyId トロフィーID
+ * @param trophyName トロフィー名
+ */
+export async function sendTrophyNotification(
+  userId: string,
+  trophyId: string,
+  trophyName: string
+): Promise<void> {
+  try {
+    await addNotification({
+      userId,
+      type: 'trophy',
+      trophyId,
+      trophyName,
+      date: new Date()
+    });
+  } catch (error) {
+    console.error('トロフィー通知追加エラー:', error);
+  }
+}
+
+/**
+ * ユーザーの未読通知数を取得する
+ * @param userId ユーザーID
+ * @returns 未読通知数
+ */
+export async function getUnreadNotificationCount(userId: string): Promise<number> {
+  try {
+    const notificationsRef = doc(db, INFO_COLLECTION, NOTIFICATIONS_DOC);
+    const notificationDoc = await getDoc(notificationsRef);
+    
+    if (!notificationDoc.exists()) return 0;
+    
+    const userData = notificationDoc.data()?.notifications?.[userId];
+    if (!userData) return 0;
+    
+    return userData.unreadCount || 0;
+  } catch (error) {
+    console.error('未読通知数取得エラー:', error);
+    return 0;
   }
 }
