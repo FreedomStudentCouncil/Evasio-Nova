@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../../firebase/config';
 import { synchronizeAllAuthorStats } from '../../../../utils/authorStatsSynchronizer';
-
+export const dynamic = "force-static";
 const ADMIN_EMAIL = "egnm9stasshe@gmail.com";
 
 export async function POST(request: NextRequest) {

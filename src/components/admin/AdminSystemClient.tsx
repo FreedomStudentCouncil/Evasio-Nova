@@ -9,8 +9,13 @@ import {
 } from "react-icons/fi";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
-import { getFirestore, collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
+import { 
+  getFirestore, collection, doc, getDoc, getDocs, setDoc, 
+  writeBatch, query, where, Timestamp, updateDoc
+} from "firebase/firestore";
 import { db, searchDb } from "../../firebase/config";
+import { calculateArticleScore } from "../../utils/articleScoreCalculator";
+import { synchronizeAllAuthorStats } from "../../utils/authorStatsSynchronizer";
 
 interface SystemStats {
   articleCount: number;
@@ -130,7 +135,7 @@ export default function AdminSystemClient() {
     fetchSystemStats();
   }, [user, isAdmin]);
 
-  // インデックス再構築処理
+  // インデックス再構築処理 - クライアントサイドで実行するように変更
   const handleRebuildIndex = async () => {
     if (rebuildingIndex) return;
     
@@ -138,27 +143,29 @@ export default function AdminSystemClient() {
     setOperationResult(null);
     
     try {
-      const token = await getIdToken();
+      // 処理開始時間
+      const startTime = Date.now();
       
-      const response = await fetch('/api/admin/rebuild-index', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'User-Id': user?.uid || ''
-        }
+      // 検索インデックスの再構築処理をクライアントサイドで実行
+      const { processedArticles, processedTags } = await rebuildSearchIndex();
+      
+      // 処理完了時間記録
+      await setDoc(doc(searchDb, 'system', 'indexLastRebuilt'), {
+        timestamp: Date.now(),
+        rebuiltBy: user?.uid || 'unknown'
       });
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'インデックス再構築中にエラーが発生しました');
-      }
+      // その他のシステムデータも更新
+      await setDoc(doc(searchDb, 'system', 'otherLastUpdated'), {
+        timestamp: Date.now()
+      });
       
-      const result = await response.json();
+      // 処理時間
+      const processingTime = (Date.now() - startTime) / 1000;
       
       setOperationResult({
         success: true,
-        message: 'インデックスを正常に再構築しました',
+        message: `インデックスを正常に再構築しました（記事${processedArticles}件、タグ${processedTags}件、処理時間: ${processingTime.toFixed(2)}秒）`,
         type: 'index'
       });
       
@@ -179,7 +186,111 @@ export default function AdminSystemClient() {
     }
   };
 
-  // 著者スコア同期処理
+  // 検索インデックスを再構築する関数 - APIルートからクライアントに移行
+  async function rebuildSearchIndex() {
+    let processedArticles = 0;
+    let processedTags = 0;
+    
+    // 1. 記事概要のインデックスを再構築
+    const articlesRef = collection(db, 'wikiArticles');
+    const articleSnapshot = await getDocs(articlesRef);
+    
+    // バッチ処理用
+    let batch = writeBatch(searchDb);
+    let batchCount = 0;
+    
+    // タグカウントを集計するオブジェクト
+    const tagCounts: { [tagName: string]: number } = {};
+    
+    // 各記事を処理
+    for (const docSnapshot of articleSnapshot.docs) {
+      const articleData = docSnapshot.data();
+      const articleId = docSnapshot.id;
+      
+      // IDが存在しない場合はスキップ
+      if (!articleId) continue;
+      
+      // 記事スコアを計算
+      const score = calculateArticleScore(
+        articleData.content || '',
+        articleData.likeCount || 0,
+        articleData.usefulCount || 0,
+        articleData.dislikeCount || 0
+      );
+      
+      // 記事概要を作成
+      const summaryRef = doc(searchDb, 'articleSummaries', articleId);
+      batch.set(summaryRef, {
+        id: articleId,
+        title: articleData.title || '',
+        description: articleData.description || '',
+        tags: articleData.tags || [],
+        author: articleData.author || '',
+        authorId: articleData.authorId || '',
+        imageUrl: articleData.imageUrl || null,
+        date: articleData.date || Timestamp.now(),
+        lastUpdated: articleData.lastUpdated || Timestamp.now(),
+        usefulCount: articleData.usefulCount || 0,
+        likeCount: articleData.likeCount || 0,
+        dislikeCount: articleData.dislikeCount || 0,
+        articleScore: score
+      });
+      
+      // タグカウントを更新
+      if (Array.isArray(articleData.tags)) {
+        articleData.tags.forEach((tag: string) => {
+          tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+        });
+      }
+      
+      processedArticles++;
+      batchCount++;
+      
+      // 500件ごとにバッチコミット
+      if (batchCount >= 500) {
+        await batch.commit();
+        batch = writeBatch(searchDb);
+        batchCount = 0;
+      }
+    }
+    
+    // 残りのバッチをコミット
+    if (batchCount > 0) {
+      await batch.commit();
+    }
+    
+    // 2. タグのインデックスを再構築
+    batch = writeBatch(searchDb);
+    batchCount = 0;
+    
+    // 各タグを処理
+    for (const [tagName, count] of Object.entries(tagCounts)) {
+      const tagRef = doc(searchDb, 'tags', tagName);
+      batch.set(tagRef, {
+        count,
+        lastUsed: Timestamp.now()
+      });
+      
+      processedTags++;
+      batchCount++;
+      
+      // 500件ごとにバッチコミット
+      if (batchCount >= 500) {
+        await batch.commit();
+        batch = writeBatch(searchDb);
+        batchCount = 0;
+      }
+    }
+    
+    // 残りのバッチをコミット
+    if (batchCount > 0) {
+      await batch.commit();
+    }
+    
+    return { processedArticles, processedTags };
+  }
+
+  // 著者スコア同期処理 - クライアントサイドで実行するように変更
   const handleSyncAuthorStats = async () => {
     if (syncingAuthorStats) return;
     
@@ -187,27 +298,18 @@ export default function AdminSystemClient() {
     setOperationResult(null);
     
     try {
-      const token = await getIdToken();
+      // 処理開始時間
+      const startTime = Date.now();
       
-      const response = await fetch('/api/admin/sync-author-stats', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'User-Id': user?.uid || ''
-        }
-      });
+      // 著者スコア同期処理をクライアントサイドで実行
+      const { processed, errors } = await synchronizeAllAuthorStats();
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '著者スコア同期中にエラーが発生しました');
-      }
-      
-      const result = await response.json();
+      // 処理時間
+      const processingTime = (Date.now() - startTime) / 1000;
       
       setOperationResult({
         success: true,
-        message: `著者スコアを同期しました (${result.processed}件処理, ${result.errors}件エラー)`,
+        message: `著者スコアを同期しました (${processed}件処理, ${errors}件エラー, 処理時間: ${processingTime.toFixed(2)}秒)`,
         type: 'sync'
       });
     } catch (error) {

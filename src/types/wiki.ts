@@ -20,21 +20,24 @@ export interface WikiArticle {
   articleScore?: number;
 }
 
-// 検索用DB用の記事概要型定義
+// 記事概要の型定義
 export interface ArticleSummary {
   id: string;
   title: string;
-  description: string;
-  tags: string[];
-  author: string;
-  authorId: string;
-  imageUrl?: string;
-  date: Timestamp | string;
-  lastUpdated?: Timestamp | FieldValue;
-  usefulCount: number;
+  description?: string;
+  content?: string;
+  tags?: string[];
+  author?: string;
+  authorId?: string;
+  imageUrl?: string | null;
+  date?: any;
+  lastUpdated?: any;
   likeCount: number;
-  dislikeCount?: number;
-  articleScore?: number; // 記事スコアを追加
+  usefulCount: number;
+  dislikeCount: number;
+  articleScore: number;
+  viewCount?: number;
+  [key: string]: any; // インデックスシグネチャを追加（任意のプロパティを許可）
 }
 
 // コメントの型定義
@@ -69,15 +72,48 @@ export interface AuthorStats {
   averageScore?: number;
 }
 
-// 記事再計算の結果型定義
-export interface RecalculationResult {
+// 記事スコア計算結果の型定義
+export interface ArticleScoreResult {
+  id: string;
+  title: string;
+  oldScore: number;
+  newScore: number;
+}
+
+// 著者スコア結果の型定義
+export interface AuthorStatsResult {
+  authorId: string;
+  articles: number;
+  totalScore: number;
+  averageScore: number;
+}
+
+// トロフィー計算結果の型定義
+export interface TrophyResult {
+  userId: string;
+  trophyCount: number;
+  badgeCount: number;
+  stats: {
+    articleCount: number;
+    likeCount: number;
+    usefulCount: number;
+    averageScore: number;
+  };
+}
+
+// リビルドインデックス結果の型定義
+export interface RebuildIndexResult {
   success: boolean;
+  processedArticles: number;
+  processedTags: number;
+  message?: string;
+  processingTime?: string;
+}
+
+// 再計算結果の型定義
+export interface RecalculationResult {
   processed: number;
   errors: number;
-  results: Array<{
-    id: string;
-    title: string;
-    oldScore: number;
-    newScore: number;
-  }>;
+  success?: boolean;
+  results?: Array<ArticleScoreResult | TrophyResult | AuthorStatsResult>;
 }

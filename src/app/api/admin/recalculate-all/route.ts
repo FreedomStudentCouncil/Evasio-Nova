@@ -6,7 +6,7 @@ import {
 import { db, searchDb } from '../../../../firebase/config';
 import { calculateArticleScore } from '../../../../utils/articleScoreCalculator';
 import { calculateUserTrophies, getAvailableBadges } from '../../../../utils/trophies';
-
+export const dynamic = "force-static";
 // 管理者メールアドレス
 const ADMIN_EMAIL = "egnm9stasshe@gmail.com";
 

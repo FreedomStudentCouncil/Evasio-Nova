@@ -8,7 +8,61 @@ import {
 } from "react-icons/fi";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
-import { RecalculationResult } from "../types/wiki";
+import { 
+  RecalculationResult, ArticleSummary
+} from "../types/wiki";
+//, ArticleScoreResult, TrophyResult, AuthorStatsResult 
+import { 
+  collection, getDocs, doc, getDoc, query, 
+  where, writeBatch, setDoc, Timestamp, updateDoc
+} from "firebase/firestore";
+import { db, searchDb } from "../firebase/config";
+import { calculateArticleScore } from "../utils/articleScoreCalculator";
+import { calculateUserTrophies, getAvailableBadges } from "../utils/trophies";
+
+// 記事スコア計算結果の型定義
+interface ArticleScoreResult {
+  id: string;
+  title: string;
+  oldScore: number;
+  newScore: number;
+}
+
+// 著者スコア結果の型定義
+interface AuthorStatsResult {
+  authorId: string;
+  articles: number;
+  totalScore: number;
+  averageScore: number;
+}
+
+// トロフィー計算結果の型定義
+interface TrophyResult {
+  userId: string;
+  trophyCount: number;
+  badgeCount: number;
+  stats: {
+    articleCount: number;
+    likeCount: number;
+    usefulCount: number;
+    averageScore: number;
+  };
+}
+
+// 結果が記事スコア結果かどうかを判定する関数
+function isArticleScoreResult(result: any): result is ArticleScoreResult {
+  return result && 'title' in result && 'oldScore' in result && 'newScore' in result;
+}
+
+// 結果がトロフィー結果かどうかを判定する関数
+function isTrophyResult(result: any): result is TrophyResult {
+  return result && 'userId' in result && 'trophyCount' in result && 'badgeCount' in result;
+}
+
+// 結果が著者スコア結果かどうかを判定する関数
+function isAuthorStatsResult(result: any): result is AuthorStatsResult {
+  return result && 'authorId' in result && 'articles' in result && 'totalScore' in result;
+}
 
 export default function AdminDashboardClient() {
   const router = useRouter();
@@ -30,19 +84,26 @@ export default function AdminDashboardClient() {
   useEffect(() => {
     const fetchLastUpdated = async () => {
       try {
-        const response = await fetch('/api/admin/get-last-updated', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${await getIdToken()}`,
-            'User-Id': user?.uid || ''
-          }
-        });
+        if (!user || !isAdmin) return;
         
-        if (response.ok) {
-          const data = await response.json();
-          setLastRecalculated(data.lastUpdated || {});
-        }
+        // 各データの最終更新時刻を取得
+        const [articlesDoc, trophiesDoc, otherDoc] = await Promise.all([
+          getDoc(doc(searchDb, 'system', 'lastUpdated')),
+          getDoc(doc(searchDb, 'system', 'trophiesLastUpdated')),
+          getDoc(doc(searchDb, 'system', 'otherLastUpdated'))
+        ]);
+
+        setLastRecalculated({
+          articles: articlesDoc.exists() 
+            ? new Date(articlesDoc.data().timestamp).toLocaleString('ja-JP') 
+            : '未計算',
+          trophies: trophiesDoc.exists() 
+            ? new Date(trophiesDoc.data().timestamp).toLocaleString('ja-JP') 
+            : '未計算',
+          other: otherDoc.exists() 
+            ? new Date(otherDoc.data().timestamp).toLocaleString('ja-JP') 
+            : '未計算'
+        });
       } catch (error) {
         console.error('最終更新時刻の取得に失敗:', error);
       }
@@ -51,9 +112,9 @@ export default function AdminDashboardClient() {
     if (user && isAdmin) {
       fetchLastUpdated();
     }
-  }, [user, isAdmin, getIdToken]);
+  }, [user, isAdmin]);
 
-  // スコア再計算処理
+  // スコア再計算処理 - クライアントサイド処理に変更
   const handleRecalculateScores = async () => {
     if (isRecalculating) return;
     
@@ -62,37 +123,37 @@ export default function AdminDashboardClient() {
     setError(null);
     
     try {
-      // 認証トークンを取得
-      const token = await getIdToken();
-      if (!token) {
-        throw new Error('認証トークンを取得できませんでした');
+      // 処理開始時間
+      const startTime = Date.now();
+      
+      let result;
+      
+      // 再計算タイプに応じた処理を実行
+      if (recalculationType === 'articles') {
+        // 記事スコアのみ再計算
+        result = await recalculateArticleScores();
+      } else if (recalculationType === 'trophies') {
+        // トロフィーのみ再計算
+        result = await recalculateTrophiesAndBadges();
+      } else {
+        // すべてを再計算
+        const articleResults = await recalculateArticleScores();
+        const authorResults = await recalculateAuthorStats();
+        const trophyResults = await recalculateTrophiesAndBadges();
+        
+        result = {
+          processed: articleResults.processed,
+          errors: articleResults.errors,
+          results: articleResults.results
+        };
+        
+        // 最終更新時刻を記録
+        await setDoc(doc(searchDb, 'system', 'lastUpdated'), {
+          timestamp: Date.now(),
+          updatedBy: user?.uid
+        });
       }
       
-      // APIエンドポイントを決定 - それぞれでarticleScoreCalculatorを使用
-      let endpoint = '/api/admin/recalculate-scores';
-      if (recalculationType === 'trophies') {
-        endpoint = '/api/admin/recalculate-trophies';
-      } else if (recalculationType === 'all') {
-        endpoint = '/api/admin/recalculate-all';
-      }
-      
-      // APIにリクエスト
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'User-Id': user?.uid || '',
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        }
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '再計算中にエラーが発生しました');
-      }
-      
-      const result = await response.json();
       setRecalculationResult(result);
       
       // 最終更新時刻を更新
@@ -107,6 +168,240 @@ export default function AdminDashboardClient() {
       setIsRecalculating(false);
     }
   };
+  
+  // 記事スコアの再計算 - APIルートからクライアントに移行
+  async function recalculateArticleScores(): Promise<RecalculationResult> {
+    // 記事データを取得
+    const articleSummariesRef = collection(searchDb, 'articleSummaries');
+    const querySnapshot = await getDocs(articleSummariesRef);
+    
+    const articles = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as ArticleSummary[];
+
+    const batch = writeBatch(searchDb);
+    const results: ArticleScoreResult[] = [];
+    let processedCount = 0;
+    let errorCount = 0;
+
+    // 各記事のスコアを再計算
+    for (const article of articles) {
+      try {
+        // メインDBから詳細な記事データを取得
+        const mainArticleRef = doc(db, 'wikiArticles', article.id);
+        const mainArticleSnap = await getDoc(mainArticleRef);
+        
+        if (!mainArticleSnap.exists()) {
+          errorCount++;
+          continue;
+        }
+        
+        const mainArticleData = mainArticleSnap.data();
+        
+        // スコアを計算
+        const newScore = calculateArticleScore(
+          mainArticleData.content,
+          article.likeCount || 0,
+          article.usefulCount || 0,
+          article.dislikeCount || 0
+        );
+        
+        // 検索用DBの記事を更新
+        const articleSummaryRef = doc(searchDb, 'articleSummaries', article.id);
+        batch.update(articleSummaryRef, { articleScore: newScore });
+        
+        results.push({
+          id: article.id,
+          title: article.title || "タイトルなし",
+          oldScore: article.articleScore || 0,
+          newScore
+        });
+        
+        processedCount++;
+      } catch (error) {
+        errorCount++;
+      }
+    }
+
+    // バッチ更新を実行
+    await batch.commit();
+    
+    // 最後の更新日時を記録
+    await updateDoc(doc(searchDb, 'system', 'lastUpdated'), {
+      timestamp: Date.now()
+    });
+
+    return {
+      processed: processedCount,
+      errors: errorCount,
+      results: results.slice(0, 20) as ArticleScoreResult[] // 結果の一部のみ返す
+    };
+  }
+  
+  // 著者スコアの再計算 - APIルートからクライアントに移行
+  async function recalculateAuthorStats(): Promise<RecalculationResult> {
+    const authorCountsRef = doc(searchDb, 'counts', 'author');
+    
+    // すべての著者IDを取得
+    const authorsQuery = query(collection(db, 'users'));
+    const authorsSnapshot = await getDocs(authorsQuery);
+    const authorIds = authorsSnapshot.docs.map(doc => doc.id);
+
+    const updatedAuthors: AuthorStatsResult[] = [];
+    const authorCounts: {[key: string]: any} = {};
+    
+    // 各著者の統計を再計算
+    for (const authorId of authorIds) {
+      try {
+        // 著者の記事を検索
+        const authorArticlesQuery = query(
+          collection(searchDb, 'articleSummaries'),
+          where('authorId', '==', authorId)
+        );
+        
+        const authorArticlesSnapshot = await getDocs(authorArticlesQuery);
+        
+        if (authorArticlesSnapshot.empty) {
+          // 記事がない場合はスキップ
+          continue;
+        }
+        
+        let scoreSum = 0;
+        let articleCount = 0;
+        let likeCount = 0;
+        let usefulCount = 0;
+        
+        // 記事ごとのスコアを正確に集計
+        authorArticlesSnapshot.forEach(doc => {
+          const data = doc.data() as ArticleSummary;
+          // 必ず articleScore フィールドを使用（undefinedの場合は0とする）
+          scoreSum += data.articleScore || 0;
+          articleCount++;
+          likeCount += data.likeCount || 0;
+          usefulCount += data.usefulCount || 0;
+        });
+        
+        // 統計を更新
+        authorCounts[authorId] = {
+          likeCount,
+          usefulCount,
+          articleScoreSum: scoreSum,
+          articleCount
+        };
+        
+        // 更新された著者を記録
+        updatedAuthors.push({
+          authorId,
+          articles: articleCount,
+          totalScore: scoreSum,
+          averageScore: articleCount > 0 ? Math.round((scoreSum / articleCount) * 10) / 10 : 0
+        });
+      } catch (error) {
+        console.error(`著者 ${authorId} の統計計算エラー:`, error);
+      }
+    }
+    
+    // 著者カウンテータを完全に置き換え（マージしない）
+    await setDoc(authorCountsRef, {
+      counts: authorCounts,
+      lastUpdated: Date.now()
+    });
+    
+    return {
+      processed: updatedAuthors.length,
+      errors: 0,
+      results: updatedAuthors.slice(0, 20) as AuthorStatsResult[] // 結果の一部のみ返す
+    };
+  }
+  
+  // トロフィーとバッジの再計算 - APIルートからクライアントに移行
+  async function recalculateTrophiesAndBadges(): Promise<RecalculationResult> {
+    // 著者の統計情報を取得
+    const authorCountsRef = doc(searchDb, 'counts', 'author');
+    const authorCountsDoc = await getDoc(authorCountsRef);
+    
+    if (!authorCountsDoc.exists()) {
+      return { processed: 0, results: [], errors: 0 };
+    }
+    
+    const authorCounts = authorCountsDoc.data().counts || {};
+    const authorIds = Object.keys(authorCounts);
+    
+    const updatedUsers: TrophyResult[] = [];
+    const userBatch = writeBatch(db);
+    let errorCount = 0;
+    
+    // 各ユーザーのトロフィーとバッジを再計算
+    for (const authorId of authorIds) {
+      try {
+        const authorData = authorCounts[authorId];
+        
+        // ユーザー統計の作成
+        const userStats = {
+          likeCount: authorData.likeCount || 0,
+          usefulCount: authorData.usefulCount || 0,
+          articleCount: authorData.articleCount || 0,
+          averageScore: authorData.articleCount > 0 
+            ? authorData.articleScoreSum / authorData.articleCount 
+            : 0,
+          totalScore: authorData.articleScoreSum || 0
+        };
+        
+        // トロフィーとバッジを計算
+        const earnedTrophies = calculateUserTrophies(userStats);
+        const availableBadges = getAvailableBadges(userStats, false);
+        
+        // ユーザードキュメントを取得
+        const userRef = doc(db, 'users', authorId);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+          // トロフィーIDのリストを作成
+          const trophyIds = earnedTrophies.map(trophy => trophy.id);
+          const badgeIds = availableBadges.map(badge => badge.id);
+          
+          // ユーザードキュメントを更新
+          userBatch.update(userRef, {
+            earnedTrophies: trophyIds,
+            availableBadges: badgeIds,
+            stats: userStats,
+            lastUpdated: Timestamp.now()
+          });
+          
+          // 更新されたユーザーを記録
+          updatedUsers.push({
+            userId: authorId,
+            trophyCount: trophyIds.length,
+            badgeCount: badgeIds.length,
+            stats: {
+              articleCount: userStats.articleCount,
+              likeCount: userStats.likeCount,
+              usefulCount: userStats.usefulCount,
+              averageScore: Math.round(userStats.averageScore * 10) / 10
+            }
+          });
+        }
+      } catch (error) {
+        console.error(`ユーザー ${authorId} のトロフィー計算エラー:`, error);
+        errorCount++;
+      }
+    }
+    
+    // バッチ更新を実行
+    await userBatch.commit();
+    
+    // トロフィー再計算の時刻を記録
+    await setDoc(doc(searchDb, 'system', 'trophiesLastUpdated'), {
+      timestamp: Date.now()
+    });
+    
+    return {
+      processed: updatedUsers.length,
+      errors: errorCount,
+      results: updatedUsers.slice(0, 20) as TrophyResult[] // 結果の一部のみ返す
+    };
+  }
 
   // ローディング中は表示しない
   if (loading) {
@@ -309,41 +604,87 @@ export default function AdminDashboardClient() {
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-slate-800">
                       <tr>
-                        <th className="px-4 py-3 text-left font-medium">記事タイトル</th>
-                        <th className="px-4 py-3 text-center font-medium">旧スコア</th>
-                        <th className="px-4 py-3 text-center font-medium">新スコア</th>
-                        <th className="px-4 py-3 text-center font-medium">変化</th>
+                        <th className="px-4 py-3 text-left font-medium">
+                          {recalculationType === 'trophies' ? 'ユーザーID' : '記事タイトル'}
+                        </th>
+                        <th className="px-4 py-3 text-center font-medium">
+                          {recalculationType === 'trophies' ? 'トロフィー数' : '旧スコア'}
+                        </th>
+                        <th className="px-4 py-3 text-center font-medium">
+                          {recalculationType === 'trophies' ? 'バッジ数' : '新スコア'}
+                        </th>
+                        <th className="px-4 py-3 text-center font-medium">
+                          {recalculationType === 'trophies' ? '記事数' : '変化'}
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700/50">
-                      {recalculationResult.results.map((result: any) => {
-                        const scoreDiff = result.newScore - result.oldScore;
-                        const isImproved = scoreDiff > 0;
-                        const isDecreased = scoreDiff < 0;
-                        const isUnchanged = scoreDiff === 0;
-                        
-                        return (
-                          <tr key={result.id} className="hover:bg-white/5">
-                            <td className="px-4 py-3 truncate max-w-xs">
-                              <Link 
-                                href={`/wiki/view?id=${result.id}`}
-                                className="text-blue-400 hover:text-blue-300 truncate inline-block max-w-full"
-                              >
-                                {result.title}
-                              </Link>
-                            </td>
-                            <td className="px-4 py-3 text-center">{Math.round(result.oldScore)}</td>
-                            <td className="px-4 py-3 text-center">{Math.round(result.newScore)}</td>
-                            <td className={`px-4 py-3 text-center ${
-                              isImproved ? 'text-green-400' : 
-                              isDecreased ? 'text-red-400' : 
-                              'text-slate-400'
-                            }`}>
-                              {isImproved && '+'}
-                              {Math.round(scoreDiff * 10) / 10}
-                            </td>
-                          </tr>
-                        );
+                      {recalculationResult.results.map((result, index) => {
+                        if (recalculationType === 'trophies' && isTrophyResult(result)) {
+                          // トロフィー再計算の結果表示
+                          return (
+                            <tr key={result.userId || index} className="hover:bg-white/5">
+                              <td className="px-4 py-3 truncate max-w-xs">
+                                <Link 
+                                  href={`/wiki/user?id=${result.userId}`}
+                                  className="text-blue-400 hover:text-blue-300 truncate inline-block max-w-full"
+                                >
+                                  {result.userId}
+                                </Link>
+                              </td>
+                              <td className="px-4 py-3 text-center">{result.trophyCount}</td>
+                              <td className="px-4 py-3 text-center">{result.badgeCount}</td>
+                              <td className="px-4 py-3 text-center">{result.stats.articleCount}</td>
+                            </tr>
+                          );
+                        } else if (isArticleScoreResult(result)) {
+                          // 記事スコア再計算の結果表示
+                          const scoreDiff = result.newScore - result.oldScore;
+                          const isImproved = scoreDiff > 0;
+                          const isDecreased = scoreDiff < 0;
+                          
+                          return (
+                            <tr key={result.id || index} className="hover:bg-white/5">
+                              <td className="px-4 py-3 truncate max-w-xs">
+                                <Link 
+                                  href={`/wiki/view?id=${result.id}`}
+                                  className="text-blue-400 hover:text-blue-300 truncate inline-block max-w-full"
+                                >
+                                  {result.title}
+                                </Link>
+                              </td>
+                              <td className="px-4 py-3 text-center">{Math.round(result.oldScore)}</td>
+                              <td className="px-4 py-3 text-center">{Math.round(result.newScore)}</td>
+                              <td className={`px-4 py-3 text-center ${
+                                isImproved ? 'text-green-400' : 
+                                isDecreased ? 'text-red-400' : 
+                                'text-slate-400'
+                              }`}>
+                                {isImproved && '+'}
+                                {Math.round(scoreDiff * 10) / 10}
+                              </td>
+                            </tr>
+                          );
+                        } else if (isAuthorStatsResult(result)) {
+                          // 著者スコア結果の表示
+                          return (
+                            <tr key={result.authorId || index} className="hover:bg-white/5">
+                              <td className="px-4 py-3 truncate max-w-xs">
+                                <Link 
+                                  href={`/wiki/user?id=${result.authorId}`}
+                                  className="text-blue-400 hover:text-blue-300 truncate inline-block max-w-full"
+                                >
+                                  {result.authorId}
+                                </Link>
+                              </td>
+                              <td className="px-4 py-3 text-center">{result.articles}</td>
+                              <td className="px-4 py-3 text-center">{Math.round(result.totalScore)}</td>
+                              <td className="px-4 py-3 text-center">{result.averageScore.toFixed(1)}</td>
+                            </tr>
+                          );
+                        } else {
+                          return null;
+                        }
                       })}
                     </tbody>
                   </table>

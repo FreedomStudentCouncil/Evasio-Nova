@@ -13,6 +13,7 @@ const commonConfig = {
         hostname: 'i.imgur.com',
       },
     ],
+    unoptimized: true, // 静的エクスポートでは必須
   },
   // 開発環境と本番環境の共通設定
   staticPageGenerationTimeout: 300,
@@ -29,7 +30,7 @@ const nextConfig = {
   images: {
     ...commonConfig.images,
     domains: ['firebasestorage.googleapis.com'],
-    unoptimized: isProductionBuild,
+    unoptimized: true,
   },
   // 本番ビルドでは各種エラーで失敗しないようにする
   eslint: {

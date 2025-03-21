@@ -1,24 +1,25 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { doc, getDoc } from 'firebase/firestore';
-import { db, searchDb } from '../../../../firebase/config';
-
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db, searchDb } from '../firebase/config';
+import { isAdmin } from '../firebase/auth';
 const ADMIN_EMAIL = "egnm9stasshe@gmail.com";
 
-// 静的生成用の設定
-export const dynamic = "force-static";
-
-export async function GET(request: NextRequest) {
+/**
+ * 最終更新時刻を取得する関数（クライアントサイド用）
+ */
+export async function getLastUpdated(userId: string): Promise<{
+  success: boolean;
+  lastUpdated?: {
+    articles: string;
+    trophies: string;
+    other: string;
+  };
+  error?: string;
+}> {
   try {
-    // 認証チェック
-    const userIdHeader = request.headers.get('user-id');
-    if (!userIdHeader) {
-      return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
-    }
-
     // 管理者権限チェック
-    const userSnapshot = await getDoc(doc(db, 'users', userIdHeader));
+    const userSnapshot = await getDoc(doc(db, 'users', userId));
     if (!userSnapshot.exists() || userSnapshot.data().email !== ADMIN_EMAIL) {
-      return NextResponse.json({ error: '管理者権限が必要です' }, { status: 403 });
+      return { success: false, error: '管理者権限が必要です' };
     }
 
     // 各データの最終更新時刻を取得
@@ -40,15 +41,15 @@ export async function GET(request: NextRequest) {
         : '未計算'
     };
 
-    return NextResponse.json({ 
-      lastUpdated,
-      success: true 
-    });
+    return { 
+      success: true,
+      lastUpdated
+    };
   } catch (error) {
     console.error('最終更新時刻取得エラー:', error);
-    return NextResponse.json(
-      { error: '最終更新時刻の取得中にエラーが発生しました' },
-      { status: 500 }
-    );
+    return { 
+      success: false, 
+      error: '最終更新時刻の取得中にエラーが発生しました' 
+    };
   }
 }

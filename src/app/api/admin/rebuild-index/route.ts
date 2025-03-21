@@ -4,7 +4,7 @@ import { db, searchDb } from '../../../../firebase/config';
 import { calculateArticleScore } from '../../../../utils/articleScoreCalculator';
 import { Timestamp } from 'firebase/firestore';
 const ADMIN_EMAIL = "egnm9stasshe@gmail.com";
-
+export const dynamic = "force-static";
 export async function POST(request: NextRequest) {
   try {
     // 認証チェック
