@@ -18,6 +18,8 @@ interface TrophyTrackerReturn {
 
 // 以前獲得したトロフィーIDをローカルストレージから取得
 const getPreviousTrophies = (userId: string): string[] => {
+  if (typeof window === 'undefined') return []; // サーバーサイドレンダリング対応
+  
   try {
     const stored = localStorage.getItem(`user_trophies_${userId}`);
     return stored ? JSON.parse(stored) : [];
@@ -29,6 +31,8 @@ const getPreviousTrophies = (userId: string): string[] => {
 
 // 獲得したトロフィーIDをローカルストレージに保存
 const saveTrophies = (userId: string, trophyIds: string[]): void => {
+  if (typeof window === 'undefined') return; // サーバーサイドレンダリング対応
+  
   try {
     localStorage.setItem(`user_trophies_${userId}`, JSON.stringify(trophyIds));
   } catch (e) {
@@ -46,9 +50,17 @@ export default function useTrophyTracker({
   const [availableBadges, setAvailableBadges] = useState<Badge[]>([]);
   const [newTrophies, setNewTrophies] = useState<Trophy[]>([]);
   const prevTrophyIdsRef = useRef<string[]>([]);
+  // トラッキングの実行状態を追跡
+  const hasTrackedRef = useRef(false);
 
   useEffect(() => {
-    if (!userId || !isActive) return;
+    // 条件付き実行をuseEffectの中に移動
+    if (!userId || !isActive) {
+      // 非アクティブでも空の値を設定する
+      setEarnedTrophies([]);
+      setAvailableBadges([]);
+      return;
+    }
     
     // ユーザーの獲得トロフィーを計算
     const trophies = calculateUserTrophies(userStats);
@@ -58,31 +70,44 @@ export default function useTrophyTracker({
     const badges = getAvailableBadges(userStats, isAdmin);
     setAvailableBadges(badges);
     
-    // 以前に獲得済みのトロフィーIDを取得
-    const prevTrophyIds = getPreviousTrophies(userId);
-    prevTrophyIdsRef.current = prevTrophyIds;
-    
-    // 新しく獲得したトロフィーを検出
-    const currentTrophyIds = trophies.map(t => t.id);
-    const newlyEarnedTrophies = trophies.filter(trophy => !prevTrophyIds.includes(trophy.id));
-    
-    if (newlyEarnedTrophies.length > 0) {
-      setNewTrophies(newlyEarnedTrophies);
+    // 新トロフィー通知処理（アクティブな場合のみ実行）
+    if (isActive && !hasTrackedRef.current) {
+      // 以前に獲得済みのトロフィーIDを取得
+      const prevTrophyIds = getPreviousTrophies(userId);
+      prevTrophyIdsRef.current = prevTrophyIds;
       
-      // 新しいトロフィーごとに通知を送信
-      newlyEarnedTrophies.forEach(async (trophy) => {
-        try {
-          await sendTrophyNotification(userId, trophy.id, trophy.title);
-          console.log(`トロフィー獲得通知を送信: ${trophy.title}`);
-        } catch (error) {
-          console.error('トロフィー通知の送信に失敗:', error);
-        }
-      });
+      // 新しく獲得したトロフィーを検出
+      const currentTrophyIds = trophies.map(t => t.id);
+      const newlyEarnedTrophies = trophies.filter(trophy => !prevTrophyIds.includes(trophy.id));
       
-      // 獲得済みトロフィーIDを更新
-      saveTrophies(userId, currentTrophyIds);
+      if (newlyEarnedTrophies.length > 0) {
+        setNewTrophies(newlyEarnedTrophies);
+        
+        // 新しいトロフィーごとに通知を送信
+        newlyEarnedTrophies.forEach(async (trophy) => {
+          try {
+            await sendTrophyNotification(userId, trophy.id, trophy.title);
+            console.log(`トロフィー獲得通知を送信: ${trophy.title}`);
+          } catch (error) {
+            console.error('トロフィー通知の送信に失敗:', error);
+          }
+        });
+        
+        // 獲得済みトロフィーIDを更新
+        saveTrophies(userId, currentTrophyIds);
+      }
+      
+      // 一度だけ実行したことをマーク
+      hasTrackedRef.current = true;
     }
   }, [userId, userStats, isAdmin, isActive]);
+
+  // コンポーネントのアンマウント時やuserIdが変わった時にhasTrackedRefをリセット
+  useEffect(() => {
+    return () => {
+      hasTrackedRef.current = false;
+    };
+  }, [userId]);
 
   // 新しいトロフィーリストをクリアする関数
   const clearNewTrophies = () => {

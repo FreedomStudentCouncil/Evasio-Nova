@@ -59,6 +59,15 @@ export default function UserProfilePageClient() {
   const badgeSelectorRef = useRef<HTMLDivElement>(null);
   
   const isOwnProfile = user?.uid === userId;
+
+  // トロフィートラッカーフックの呼び出しを条件付きではなく常に呼び出す
+  // パラメータの方で実行を制御する
+  const { earnedTrophies, availableBadges, newTrophies, clearNewTrophies } = useTrophyTracker({
+    userId,
+    userStats,
+    isAdmin,
+    isActive: isOwnProfile // 自分のプロフィールページでのみ有効
+  });
   
   // 外部クリック検出のための効果
   useEffect(() => {
@@ -93,10 +102,11 @@ export default function UserProfilePageClient() {
           setUserBio(userData.bio || "");
           setNewBio(userData.bio || "");
           
-          // 管理者チェック
+          // 管理者チェック - 明示的に管理者メールアドレスを確認
           if (userData.email) {
-            const adminCheck = await isAdminEmail(userData.email);
-            setIsAdmin(adminCheck);
+            const isAdminUser = userData.email === "egnm9stasshe@gmail.com";
+            setIsAdmin(isAdminUser);
+            console.log("管理者チェック:", userData.email, isAdminUser);
           }
         }
         
@@ -308,14 +318,6 @@ export default function UserProfilePageClient() {
   // プロフィール編集ボタンの表示条件を変更
   const canEdit = isOwnProfile && isEmailVerified;
 
-  // トロフィートラッカーを利用
-  const { earnedTrophies, availableBadges, newTrophies, clearNewTrophies } = useTrophyTracker({
-    userId,
-    userStats,
-    isAdmin,
-    isActive: isOwnProfile // 自分のプロフィールページでのみ有効
-  });
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white">
       <div className="container mx-auto px-4 py-12">
@@ -365,19 +367,9 @@ export default function UserProfilePageClient() {
                     )}
                   </div>
                   
-                  {/* バッジ選択ボタン - 自分のプロフィールで獲得バッジがある場合 */}
-                  {isOwnProfile && availableBadges.length > 0 && (
-                    <button 
-                      onClick={() => setShowBadgeSelector(!showBadgeSelector)}
-                      className="absolute -bottom-2 -right-2 bg-blue-500 rounded-full p-1.5 cursor-pointer hover:bg-blue-600 transition-colors"
-                    >
-                      <FiAward className="text-sm" />
-                    </button>
-                  )}
-                  
-                  {/* 画像アップロードボタン */}
+                  {/* 画像アップロードボタン - 左下に配置 */}
                   {isOwnProfile && (
-                    <label className="absolute bottom-0 left-0 bg-blue-500 rounded-full p-1.5 cursor-pointer hover:bg-blue-600 transition-colors">
+                    <label className="absolute -bottom-2 -left-2 bg-blue-500 rounded-full p-1.5 cursor-pointer hover:bg-blue-600 transition-colors">
                       <FiCamera className="text-sm" />
                       <input
                         type="file"
@@ -389,58 +381,108 @@ export default function UserProfilePageClient() {
                     </label>
                   )}
                   
-                  {/* バッジセレクター - React-Iconsを使用 */}
-                  <AnimatePresence>
-                    {showBadgeSelector && (
+                  {/* バッジ選択ボタン - 右上に配置して被りを防ぐ */}
+                  {isOwnProfile && (
+                    <button 
+                      onClick={() => setShowBadgeSelector(!showBadgeSelector)}
+                      className="absolute -top-2 -right-2 bg-blue-500 rounded-full p-1.5 cursor-pointer hover:bg-blue-600 transition-colors"
+                    >
+                      <FiAward className="text-sm" />
+                    </button>
+                  )}
+                </div>
+                
+                {/* バッジセレクターをモーダルとして実装 - 画面中央に配置 */}
+                <AnimatePresence>
+                  {showBadgeSelector && (
+                    <>
+                      {/* モーダルオーバーレイ */}
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+                        onClick={() => setShowBadgeSelector(false)}
+                      />
+                      
+                      {/* モーダルコンテンツ */}
                       <motion.div 
                         ref={badgeSelectorRef}
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.9 }}
-                        className="absolute top-full right-0 mt-2 w-64 bg-slate-800/95 backdrop-blur-md border border-white/20 rounded-lg shadow-lg z-10"
+                        className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 max-h-[80vh] overflow-y-auto bg-slate-800/95 backdrop-blur-md border border-white/20 rounded-lg shadow-xl z-50"
                       >
-                        <div className="p-2 border-b border-white/10">
-                          <h3 className="text-sm font-medium">バッジを選択</h3>
+                        <div className="p-3 border-b border-white/10 flex justify-between items-center">
+                          <h3 className="text-lg font-medium">バッジを選択</h3>
+                          <button
+                            onClick={() => setShowBadgeSelector(false)} 
+                            className="text-white/60 hover:text-white"
+                          >
+                            <FiX />
+                          </button>
                         </div>
-                        <div className="p-2 space-y-2">
+                        <div className="p-4 space-y-3">
                           {/* バッジなしオプション */}
                           <button
                             onClick={() => handleBadgeSelect(null)}
-                            className={`flex items-center gap-2 w-full p-2 rounded-md hover:bg-white/10 transition-colors ${
+                            className={`flex items-center gap-3 w-full p-3 rounded-md hover:bg-white/10 transition-colors ${
                               selectedBadge === null ? 'bg-blue-500/30 border border-blue-500/50' : ''
                             }`}
                           >
-                            <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center">
-                              <FiX size={14} />
+                            <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center">
+                              <FiX size={16} />
                             </div>
-                            <div>
-                              <span className="text-sm block">なし</span>
+                            <div className="text-left">
+                              <span className="text-sm block font-medium">なし</span>
                               <span className="text-xs text-slate-400">バッジを表示しない</span>
                             </div>
                           </button>
                           
-                          {availableBadges.map(badge => (
+                          {/* 管理者バッジの特別表示 - 管理者の場合のみ */}
+                          {isAdmin && (
                             <button
-                              key={badge.id}
-                              onClick={() => handleBadgeSelect(badge.id)}
-                              className={`flex items-center gap-2 w-full p-2 rounded-md hover:bg-white/10 transition-colors ${
-                                selectedBadge === badge.id ? 'bg-blue-500/30 border border-blue-500/50' : ''
+                              onClick={() => handleBadgeSelect("admin")}
+                              className={`flex items-center gap-3 w-full p-3 rounded-md hover:bg-white/10 transition-colors ${
+                                selectedBadge === "admin" ? 'bg-blue-500/30 border border-blue-500/50' : ''
                               }`}
                             >
-                              <div className="w-7 h-7 rounded-full bg-slate-700/50 flex items-center justify-center">
-                                <badge.icon className={`${badge.color} text-lg`} />
+                              <div className="w-10 h-10 rounded-full bg-red-700/50 flex items-center justify-center">
+                                <FiInfo className="text-red-400 text-lg" />
                               </div>
-                              <div>
-                                <span className="text-sm block">{badge.name}</span>
-                                <span className="text-xs text-slate-400">{badge.description}</span>
+                              <div className="text-left">
+                                <span className="text-sm block font-medium">管理者</span>
+                                <span className="text-xs text-slate-400">サイト管理者用特別バッジ</span>
                               </div>
                             </button>
-                          ))}
+                          )}
+                          
+                          {/* 獲得済みバッジ - 利用可能なバッジからadminを除外 */}
+                          {availableBadges
+                            .filter(badge => badge.id !== "admin") // 管理者バッジを除外
+                            .map(badge => (
+                              <button
+                                key={badge.id}
+                                onClick={() => handleBadgeSelect(badge.id)}
+                                className={`flex items-center gap-3 w-full p-3 rounded-md hover:bg-white/10 transition-colors ${
+                                  selectedBadge === badge.id ? 'bg-blue-500/30 border border-blue-500/50' : ''
+                                }`}
+                              >
+                                <div className="w-10 h-10 rounded-full bg-slate-700/50 flex items-center justify-center">
+                                  <badge.icon className={`${badge.color} text-lg`} />
+                                </div>
+                                <div className="text-left">
+                                  <span className="text-sm block font-medium">{badge.name}</span>
+                                  <span className="text-xs text-slate-400">{badge.description}</span>
+                                </div>
+                              </button>
+                            ))
+                          }
                         </div>
                       </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                    </>
+                  )}
+                </AnimatePresence>
                 
                 <div className="flex-1">
                   {isEditing && isOwnProfile ? (
