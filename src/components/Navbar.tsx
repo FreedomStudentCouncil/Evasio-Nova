@@ -9,10 +9,9 @@ import {getUserNotifications} from "../firebase/notification";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAdmin } = useAuth(); // AuthContextから直接isAdminを取得
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
-  const isAdmin = user && user.email === "egnm9stasshe@gmail.com"; // 管理者判定の例
   
   // 画面幅が変更された時にメニューを閉じる
   useEffect(() => {
