@@ -20,7 +20,6 @@ import { synchronizeAllAuthorStats } from "../../utils/authorStatsSynchronizer";
 interface SystemStats {
   articleCount: number;
   userCount: number;
-  commentCount: number;
   tagCount: number;
   lastCalculated: string;
 }
@@ -63,14 +62,19 @@ export default function AdminSystemClient() {
           });
         const articleCount = articleDocs.size;
         
-        // ユーザー数を取得
-        const userQuery = collection(db, 'users');
-        const userDocs = await getDocs(userQuery)
-          .catch(err => {
-            console.error("ユーザー取得エラー:", err);
-            return { size: 0, docs: [] };
-          });
-        const userCount = userDocs.size;
+        // 著者数を取得 - countsはサブコレクションではなくMap型フィールド
+        let userCount = 0;
+        try {
+          const authorDocRef = doc(searchDb, 'counts', 'author');
+          const authorDoc = await getDoc(authorDocRef);
+          
+          if (authorDoc.exists() && authorDoc.data().counts) {
+            // countsフィールドがMapなので、そのキーの数を数える
+            userCount = Object.keys(authorDoc.data().counts).length;
+          }
+        } catch (err) {
+          console.error("著者取得エラー:", err);
+        }
         
         // タグ数を取得
         const tagQuery = collection(searchDb, 'tags');
@@ -81,27 +85,10 @@ export default function AdminSystemClient() {
           });
         const tagCount = tagDocs.size;
         
-        // コメント数は各記事のサブコレクションなので概算
-        let commentCount = 0;
-        if (articleDocs.size <= 100 && articleDocs.docs?.length > 0) { // 記事数が多い場合は一部のみサンプリング
-          for (const articleDoc of articleDocs.docs) {
-            try {
-              const commentQuery = collection(db, 'wikiArticles', articleDoc.id, 'comments');
-              const commentDocs = await getDocs(commentQuery);
-              commentCount += commentDocs.size;
-            } catch (commentErr) {
-              console.error(`記事${articleDoc.id}のコメント取得エラー:`, commentErr);
-            }
-          }
-        } else {
-          // 記事数が多い場合は推定値
-          commentCount = Math.round(articleCount * 2.5); // 平均コメント数で推定
-        }
-        
         // 最後の計算日時 - デフォルト値を設定
         let lastCalculated = '未計算';
         try {
-          const lastUpdatedRef = doc(db, 'info', 'stats');
+          const lastUpdatedRef = doc(searchDb, 'system', 'indexLastRebuilt');
           const lastUpdatedDoc = await getDoc(lastUpdatedRef);
           if (lastUpdatedDoc.exists() && lastUpdatedDoc.data().timestamp) {
             lastCalculated = new Date(lastUpdatedDoc.data().timestamp).toLocaleString('ja-JP');
@@ -113,7 +100,6 @@ export default function AdminSystemClient() {
         setSystemStats({
           articleCount,
           userCount,
-          commentCount,
           tagCount,
           lastCalculated
         });
@@ -123,7 +109,6 @@ export default function AdminSystemClient() {
         setSystemStats({
           articleCount: 0,
           userCount: 0,
-          commentCount: 0,
           tagCount: 0,
           lastCalculated: 'エラーが発生しました'
         });
@@ -363,7 +348,7 @@ export default function AdminSystemClient() {
             <div className="p-6 border-b border-white/10">
               <h2 className="text-xl font-bold mb-4 flex items-center">
                 <FiActivity className="text-blue-400 mr-2" />
-                システム統計情報(当てにはならない)
+                システム統計情報
               </h2>
               
               {isLoadingStats ? (
@@ -371,7 +356,7 @@ export default function AdminSystemClient() {
                   <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full"></div>
                 </div>
               ) : systemStats ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <StatCard 
                     icon={<FiFileText className="text-blue-400" />}
                     title="記事数"
@@ -379,13 +364,8 @@ export default function AdminSystemClient() {
                   />
                   <StatCard 
                     icon={<FiUsers className="text-green-400" />}
-                    title="ユーザー数"
+                    title="著者数"
                     value={systemStats.userCount.toString()}
-                  />
-                  <StatCard 
-                    icon={<FiMessageSquare className="text-amber-400" />}
-                    title="コメント数"
-                    value={systemStats.commentCount.toString()}
                   />
                   <StatCard 
                     icon={<FiHash className="text-purple-400" />}
