@@ -25,7 +25,7 @@ import {
   getAvailableBadges 
 } from "../utils/trophies";
 import useTrophyTracker from "../hooks/useTrophyTracker";
-import { sendBadgeNotification } from "../firebase/notification";
+import { sendBadgeNotification, sendTrophyNotification } from "../firebase/notification";
 
 export default function UserProfilePageClient() {
   const { user, isEmailVerified } = useAuth();
@@ -144,6 +144,28 @@ export default function UserProfilePageClient() {
     }
   }, [userId, user?.uid]);
   
+  // useEffect内でトロフィー獲得通知を処理
+  useEffect(() => {
+    // 新しく獲得したトロフィーがある場合、通知を送信
+    if (isOwnProfile && newTrophies.length > 0) {
+      const sendNotifications = async () => {
+        try {
+          // 各トロフィーについて通知を送信
+          for (const trophy of newTrophies) {
+            await sendTrophyNotification(userId, trophy.id, trophy.title);
+            console.log(`トロフィー獲得通知を送信: ${trophy.title}`);
+          }
+          // 新しいトロフィーをクリア
+          clearNewTrophies();
+        } catch (error) {
+          console.error('トロフィー通知の送信に失敗:', error);
+        }
+      };
+      
+      sendNotifications();
+    }
+  }, [newTrophies, userId, isOwnProfile, clearNewTrophies]);
+
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -352,9 +374,12 @@ export default function UserProfilePageClient() {
                       <FiUser className="text-3xl" />
                     )}
                     
-                    {/* バッジ表示 - React-Iconsを使用 */}
+                    {/* バッジ表示 - React-Iconsを使用、クリック可能に */}
                     {selectedBadge && (
-                      <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-slate-800/90 backdrop-blur-md border border-white/30 flex items-center justify-center overflow-hidden">
+                      <div 
+                        className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-slate-800/90 backdrop-blur-md border border-white/30 flex items-center justify-center overflow-hidden cursor-pointer hover:border-white/60 transition-all"
+                        onClick={() => isOwnProfile && setShowBadgeSelector(true)}
+                      >
                         {(() => {
                           const badge = allBadges.find(b => b.id === selectedBadge);
                           if (badge) {
@@ -381,11 +406,11 @@ export default function UserProfilePageClient() {
                     </label>
                   )}
                   
-                  {/* バッジ選択ボタン - 右上に配置して被りを防ぐ */}
-                  {isOwnProfile && (
+                  {/* バッジ選択ボタン - バッジがない場合のみ表示 */}
+                  {isOwnProfile && !selectedBadge && (
                     <button 
                       onClick={() => setShowBadgeSelector(!showBadgeSelector)}
-                      className="absolute -top-2 -right-2 bg-blue-500 rounded-full p-1.5 cursor-pointer hover:bg-blue-600 transition-colors"
+                      className="absolute -bottom-2 -right-2 bg-blue-500 rounded-full p-1.5 cursor-pointer hover:bg-blue-600 transition-colors"
                     >
                       <FiAward className="text-sm" />
                     </button>

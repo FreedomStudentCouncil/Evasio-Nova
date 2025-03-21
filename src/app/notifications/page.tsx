@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { FiBell, FiCheck } from 'react-icons/fi';
+import { FiBell, FiCheck, FiAward, FiInfo } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { 
   getUserNotifications, 
@@ -113,26 +113,44 @@ export default function NotificationsPage() {
                 }`}
               >
                 <div className="flex justify-between items-start">
-                  <Link href={`/wiki/article?id=${notification.articleId}`} className="flex-1">
-                    <div className="mb-2">
-                      <div className="font-medium">
-                        {notification.senderName}さんが
-                        {notification.type === 'comment' && 'コメントを投稿しました'}
-                        {notification.type === 'reply' && '返信しました'}
-                        {notification.type === 'like' && 'いいねしました'}
+                  {notification.type === 'trophy' || notification.type === 'badge' ? (
+                    // トロフィーやバッジの通知の場合
+                    <div className="flex-1">
+                      <div className="mb-2 flex items-center">
+                        {notification.type === 'trophy' && <FiAward className="text-yellow-400 mr-2" />}
+                        {notification.type === 'badge' && <FiInfo className="text-blue-400 mr-2" />}
+                        <div className="font-medium">
+                          {notification.type === 'trophy' && `トロフィー「${notification.trophyName}」を獲得しました！`}
+                          {notification.type === 'badge' && `バッジ「${notification.badgeName}」を設定しました`}
+                        </div>
                       </div>
-                      <div className="text-sm text-gray-400">
-                        記事: {notification.articleTitle}
+                      <div className="text-sm text-gray-300">
+                        おめでとうございます！プロフィールページで確認できます。
                       </div>
                     </div>
-                    <p className="text-sm text-gray-300">{notification.content}</p>
-                  </Link>
+                  ) : (
+                    // 記事関連の通知の場合
+                    <Link href={`/wiki/article?id=${notification.articleId}`} className="flex-1">
+                      <div className="mb-2">
+                        <div className="font-medium">
+                          {notification.senderName}さんが
+                          {notification.type === 'comment' && 'コメントを投稿しました'}
+                          {notification.type === 'reply' && '返信しました'}
+                          {notification.type === 'like' && 'いいねしました'}
+                        </div>
+                        <div className="text-sm text-gray-400">
+                          記事: {notification.articleTitle}
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-300">{notification.content}</p>
+                    </Link>
+                  )}
 
                   {!notification.read && (
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => handleMarkAsRead(notification.id)}
+                      onClick={() => handleMarkAsRead(notification.id || '')}
                       className="ml-4 p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
                     >
                       <FiCheck />
