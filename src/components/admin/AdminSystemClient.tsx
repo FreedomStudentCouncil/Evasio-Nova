@@ -51,37 +51,59 @@ export default function AdminSystemClient() {
         
         // 記事数を取得
         const articleQuery = collection(searchDb, 'articleSummaries');
-        const articleDocs = await getDocs(articleQuery);
+        const articleDocs = await getDocs(articleQuery)
+          .catch(err => {
+            console.error("記事取得エラー:", err);
+            return { size: 0, docs: [] };
+          });
         const articleCount = articleDocs.size;
         
         // ユーザー数を取得
         const userQuery = collection(db, 'users');
-        const userDocs = await getDocs(userQuery);
+        const userDocs = await getDocs(userQuery)
+          .catch(err => {
+            console.error("ユーザー取得エラー:", err);
+            return { size: 0, docs: [] };
+          });
         const userCount = userDocs.size;
         
         // タグ数を取得
         const tagQuery = collection(searchDb, 'tags');
-        const tagDocs = await getDocs(tagQuery);
+        const tagDocs = await getDocs(tagQuery)
+          .catch(err => {
+            console.error("タグ取得エラー:", err);
+            return { size: 0, docs: [] };
+          });
         const tagCount = tagDocs.size;
         
         // コメント数は各記事のサブコレクションなので概算
         let commentCount = 0;
-        if (articleDocs.size <= 100) { // 記事数が多い場合は一部のみサンプリング
+        if (articleDocs.size <= 100 && articleDocs.docs?.length > 0) { // 記事数が多い場合は一部のみサンプリング
           for (const articleDoc of articleDocs.docs) {
-            const commentQuery = collection(db, 'wikiArticles', articleDoc.id, 'comments');
-            const commentDocs = await getDocs(commentQuery);
-            commentCount += commentDocs.size;
+            try {
+              const commentQuery = collection(db, 'wikiArticles', articleDoc.id, 'comments');
+              const commentDocs = await getDocs(commentQuery);
+              commentCount += commentDocs.size;
+            } catch (commentErr) {
+              console.error(`記事${articleDoc.id}のコメント取得エラー:`, commentErr);
+            }
           }
         } else {
           // 記事数が多い場合は推定値
           commentCount = Math.round(articleCount * 2.5); // 平均コメント数で推定
         }
         
-        // 最後の計算日時
-        const lastUpdatedDoc = await getDoc(doc(searchDb, 'system', 'lastUpdated'));
-        const lastCalculated = lastUpdatedDoc.exists() 
-          ? new Date(lastUpdatedDoc.data().timestamp).toLocaleString('ja-JP')
-          : '未計算';
+        // 最後の計算日時 - デフォルト値を設定
+        let lastCalculated = '未計算';
+        try {
+          const lastUpdatedRef = doc(db, 'info', 'stats');
+          const lastUpdatedDoc = await getDoc(lastUpdatedRef);
+          if (lastUpdatedDoc.exists() && lastUpdatedDoc.data().timestamp) {
+            lastCalculated = new Date(lastUpdatedDoc.data().timestamp).toLocaleString('ja-JP');
+          }
+        } catch (timeErr) {
+          console.error("最終更新時刻取得エラー:", timeErr);
+        }
         
         setSystemStats({
           articleCount,
@@ -92,6 +114,14 @@ export default function AdminSystemClient() {
         });
       } catch (error) {
         console.error("システム統計取得エラー:", error);
+        // エラーが発生してもデフォルト値を設定
+        setSystemStats({
+          articleCount: 0,
+          userCount: 0,
+          commentCount: 0,
+          tagCount: 0,
+          lastCalculated: 'エラーが発生しました'
+        });
       } finally {
         setIsLoadingStats(false);
       }
@@ -99,55 +129,6 @@ export default function AdminSystemClient() {
     
     fetchSystemStats();
   }, [user, isAdmin]);
-
-  // キャッシュクリア処理
-  const handleClearCache = async () => {
-    if (clearingCache) return;
-    
-    setClearingCache(true);
-    setOperationResult(null);
-    
-    try {
-      const token = await getIdToken();
-      
-      const response = await fetch('/api/admin/clear-cache', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'User-Id': user?.uid || ''
-        }
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'キャッシュクリア中にエラーが発生しました');
-      }
-      
-      const result = await response.json();
-      
-      setOperationResult({
-        success: true,
-        message: 'キャッシュを正常にクリアしました',
-        type: 'cache'
-      });
-      
-      // システム情報を更新
-      await setDoc(doc(searchDb, 'system', 'cacheLastCleared'), {
-        timestamp: Date.now(),
-        clearedBy: user?.uid || 'unknown'
-      });
-    } catch (error) {
-      console.error('キャッシュクリアエラー:', error);
-      setOperationResult({
-        success: false,
-        message: error instanceof Error ? error.message : '不明なエラーが発生しました',
-        type: 'cache'
-      });
-    } finally {
-      setClearingCache(false);
-    }
-  };
 
   // インデックス再構築処理
   const handleRebuildIndex = async () => {
@@ -276,21 +257,11 @@ export default function AdminSystemClient() {
             transition={{ duration: 0.5 }}
             className="bg-white/10 backdrop-blur-md rounded-xl border border-white/20 overflow-hidden mb-8"
           >
-            <div className="p-6 border-b border-white/10">
-              <div className="flex items-center gap-3 mb-2">
-                <FiDatabase className="text-2xl text-purple-400" />
-                <h1 className="text-2xl font-bold">システム管理</h1>
-              </div>
-              <p className="text-slate-300">
-                システム情報の確認、キャッシュのクリア、インデックスの再構築などを行います。
-              </p>
-            </div>
-
             {/* システム統計情報 */}
             <div className="p-6 border-b border-white/10">
               <h2 className="text-xl font-bold mb-4 flex items-center">
                 <FiActivity className="text-blue-400 mr-2" />
-                システム統計情報
+                システム統計情報(当てにはならない)
               </h2>
               
               {isLoadingStats ? (
@@ -339,59 +310,6 @@ export default function AdminSystemClient() {
               </h2>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* キャッシュクリア */}
-                <div className="bg-white/5 rounded-lg p-6 border border-white/10">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="p-3 rounded-full bg-blue-500/20">
-                      <FiCloud className="text-blue-400" />
-                    </div>
-                    <h3 className="text-lg font-bold">キャッシュクリア</h3>
-                  </div>
-                  
-                  <p className="text-slate-300 mb-4">
-                    システムのキャッシュをクリアします。これにより最新のデータが表示されるようになります。
-                  </p>
-                  
-                  <button
-                    onClick={handleClearCache}
-                    disabled={clearingCache}
-                    className={`w-full py-3 rounded-lg font-medium ${
-                      clearingCache 
-                        ? 'bg-slate-600/50 text-slate-300 cursor-not-allowed' 
-                        : 'bg-blue-500/80 hover:bg-blue-500 text-white'
-                    }`}
-                  >
-                    {clearingCache ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                        <span>処理中...</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center gap-2">
-                        <FiRefreshCw />
-                        <span>キャッシュをクリア</span>
-                      </div>
-                    )}
-                  </button>
-                  
-                  {operationResult && operationResult.type === 'cache' && (
-                    <div className={`mt-4 p-3 rounded-lg text-sm ${
-                      operationResult.success 
-                        ? 'bg-green-500/20 text-green-400' 
-                        : 'bg-red-500/20 text-red-400'
-                    }`}>
-                      <div className="flex items-start gap-2">
-                        {operationResult.success ? (
-                          <FiCheck className="mt-0.5" />
-                        ) : (
-                          <FiAlertTriangle className="mt-0.5" />
-                        )}
-                        <span>{operationResult.message}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                
                 {/* インデックス再構築 */}
                 <div className="bg-white/5 rounded-lg p-6 border border-white/10">
                   <div className="flex items-center gap-3 mb-3">
