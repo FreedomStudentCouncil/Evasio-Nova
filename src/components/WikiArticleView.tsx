@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { Timestamp } from 'firebase/firestore';
 import { WikiArticle } from '../types/wiki';
 import { getArticleCountById } from '../firebase/wiki';
-import { FiCalendar, FiUser, FiThumbsUp, FiCheckCircle } from "react-icons/fi";
+import { FiCalendar, FiUser, FiThumbsUp, FiCheckCircle, FiEdit2 } from "react-icons/fi";
 import Link from "next/link";
 import ShareButton from "./ShareButton";
 import ReactMarkdown from "react-markdown";
@@ -18,9 +18,10 @@ import { incrementLikeCount, incrementUsefulCount } from "../firebase/wiki";
 
 interface WikiArticleViewProps {
   article: WikiArticle;
+  isAdmin?: boolean;
 }
 
-export default function WikiArticleView({ article }: WikiArticleViewProps) {
+export default function WikiArticleView({ article, isAdmin = false }: WikiArticleViewProps) {
   const { user } = useAuth();
   const [formattedDate, setFormattedDate] = useState<string>('');
   const [likeCount, setLikeCount] = useState(article.likeCount || 0);
@@ -97,7 +98,7 @@ export default function WikiArticleView({ article }: WikiArticleViewProps) {
     fetchLatestCounts();
     
     // 30秒ごとに最新のカウントを取得
-    const interval = setInterval(fetchLatestCounts, 30000);
+    const interval = setInterval(fetchLatestCounts, 3000000000);
     return () => clearInterval(interval);
   }, [article.id]);
 
@@ -240,6 +241,15 @@ export default function WikiArticleView({ article }: WikiArticleViewProps) {
                   <FiCheckCircle className="mr-1" />
                   <span>使えた！ {usefulCount}</span>
                 </div>
+                {isAdmin && (
+                  <Link 
+                    href={`/wiki/edit/${article.id}`}
+                    className="ml-auto text-blue-600 hover:text-blue-800 flex items-center"
+                  >
+                    <FiEdit2 className="mr-1" />
+                    <span>編集</span>
+                  </Link>
+                )}
                 <div className="flex-grow"></div>
                 <ShareButton title={article.title} />
               </div>
