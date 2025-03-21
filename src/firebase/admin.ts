@@ -9,7 +9,8 @@ import {
   orderBy,
   limit,
   updateDoc,
-  deleteDoc
+  deleteDoc,
+  setDoc
 } from 'firebase/firestore';
 import { db, searchDb } from './config';
 import { isAdmin } from './auth';
@@ -136,6 +137,60 @@ export async function resetDislikeCount(articleId: string): Promise<void> {
     }
   } catch (error) {
     console.error('低評価のリセットに失敗:', error);
+    throw error;
+  }
+}
+
+/**
+ * 管理者専用: 管理者設定データを取得する
+ * @returns 管理者設定データ
+ */
+export async function getAdminSettings(): Promise<any> {
+  try {
+    // まず既存の counts コレクションから設定を取得する
+    const countRef = doc(searchDb, 'counts', 'admin');
+    const docSnap = await getDoc(countRef);
+    
+    if (docSnap.exists()) {
+      return docSnap.data();
+    }
+    
+    return {};
+  } catch (error) {
+    console.error('管理者設定の取得に失敗:', error);
+    return {};
+  }
+}
+
+/**
+ * 管理者専用: 管理者設定データを更新する
+ * @param settings 更新する設定データ
+ */
+export async function updateAdminSettings(settings: any): Promise<void> {
+  try {
+    // countsコレクションを使用して管理者設定を保存
+    const countRef = doc(searchDb, 'counts', 'admin');
+    await setDoc(countRef, {
+      ...settings,
+      lastUpdated: Date.now()
+    }, { merge: true });
+  } catch (error) {
+    console.error('管理者設定の更新に失敗:', error);
+    throw error;
+  }
+}
+
+/**
+ * 管理者専用: 特定の設定値を保存する
+ * @param key 設定キー
+ * @param value 設定値
+ */
+export async function setAdminSettingValue(key: string, value: any): Promise<void> {
+  try {
+    const settings = { [key]: value };
+    await updateAdminSettings(settings);
+  } catch (error) {
+    console.error(`管理者設定 ${key} の保存に失敗:`, error);
     throw error;
   }
 }

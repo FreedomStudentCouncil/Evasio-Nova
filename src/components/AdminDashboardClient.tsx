@@ -14,7 +14,7 @@ import {
 //, ArticleScoreResult, TrophyResult, AuthorStatsResult 
 import { 
   collection, getDocs, doc, getDoc, query, 
-  where, writeBatch, setDoc, Timestamp, updateDoc
+  where, writeBatch, setDoc, Timestamp, updateDoc, limit
 } from "firebase/firestore";
 import { db, searchDb } from "../firebase/config";
 import { calculateArticleScore } from "../utils/articleScoreCalculator";
@@ -86,24 +86,40 @@ export default function AdminDashboardClient() {
       try {
         if (!user || !isAdmin) return;
         
-        // 各データの最終更新時刻を取得
-        const [articlesDoc, trophiesDoc, otherDoc] = await Promise.all([
-          getDoc(doc(searchDb, 'system', 'lastUpdated')),
-          getDoc(doc(searchDb, 'system', 'trophiesLastUpdated')),
-          getDoc(doc(searchDb, 'system', 'otherLastUpdated'))
-        ]);
-
-        setLastRecalculated({
-          articles: articlesDoc.exists() 
-            ? new Date(articlesDoc.data().timestamp).toLocaleString('ja-JP') 
-            : '未計算',
-          trophies: trophiesDoc.exists() 
-            ? new Date(trophiesDoc.data().timestamp).toLocaleString('ja-JP') 
-            : '未計算',
-          other: otherDoc.exists() 
-            ? new Date(otherDoc.data().timestamp).toLocaleString('ja-JP') 
-            : '未計算'
-        });
+        console.log("最終更新時刻を確認中...");
+        
+        // デフォルト値を設定
+        const defaultLastRecalculated = {
+          articles: '未計算',
+          trophies: '未計算',
+          other: '未計算'
+        };
+        
+        try {
+          // 著者スコア情報から最終更新時刻を取得
+          const authorCountsRef = doc(searchDb, 'counts', 'author');
+          const authorCountsDoc = await getDoc(authorCountsRef);
+          
+          if (authorCountsDoc.exists() && authorCountsDoc.data().lastUpdated) {
+            defaultLastRecalculated.articles = new Date(authorCountsDoc.data().lastUpdated).toLocaleString('ja-JP');
+          }
+          
+          // トロフィー情報を確認するために数名のユーザーをチェック
+          const usersQuery = query(collection(db, 'users'), limit(1));
+          const usersSnapshot = await getDocs(usersQuery);
+          
+          if (!usersSnapshot.empty) {
+            const userDoc = usersSnapshot.docs[0];
+            if (userDoc.data().lastUpdated) {
+              defaultLastRecalculated.trophies = new Date(userDoc.data().lastUpdated.toDate()).toLocaleString('ja-JP');
+            }
+          }
+          
+          setLastRecalculated(defaultLastRecalculated);
+        } catch (error) {
+          console.warn('最終更新時刻の取得時にエラーが発生しました:', error);
+          setLastRecalculated(defaultLastRecalculated);
+        }
       } catch (error) {
         console.error('最終更新時刻の取得に失敗:', error);
       }
@@ -169,18 +185,33 @@ export default function AdminDashboardClient() {
     }
   };
   
-  // 記事スコアの再計算 - APIルートからクライアントに移行
-  async function recalculateArticleScores(): Promise<RecalculationResult> {
+// 記事スコアの再計算 - APIルートからクライアントに移行
+async function recalculateArticleScores(): Promise<RecalculationResult> {
+  try {
+    console.log("記事スコア再計算を開始...");
+    
     // 記事データを取得
     const articleSummariesRef = collection(searchDb, 'articleSummaries');
     const querySnapshot = await getDocs(articleSummariesRef);
+    
+    console.log(`${querySnapshot.docs.length}件の記事を検出しました`);
+    
+    if (querySnapshot.empty) {
+      console.warn("記事が見つかりませんでした");
+      return { processed: 0, errors: 0, results: [] };
+    }
     
     const articles = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     })) as ArticleSummary[];
 
-    const batch = writeBatch(searchDb);
+    // バッチ処理は大量の更新に制限があるため、小さなバッチに分割
+    const batchSize = 20; // 1バッチあたりの最大更新数
+    const batches = [];
+    let currentBatch = writeBatch(searchDb);
+    let operationsCount = 0;
+    
     const results: ArticleScoreResult[] = [];
     let processedCount = 0;
     let errorCount = 0;
@@ -188,16 +219,26 @@ export default function AdminDashboardClient() {
     // 各記事のスコアを再計算
     for (const article of articles) {
       try {
+        // バッチサイズをチェックして必要に応じて新しいバッチを作成
+        if (operationsCount >= batchSize) {
+          batches.push(currentBatch);
+          currentBatch = writeBatch(searchDb);
+          operationsCount = 0;
+        }
+        
         // メインDBから詳細な記事データを取得
         const mainArticleRef = doc(db, 'wikiArticles', article.id);
         const mainArticleSnap = await getDoc(mainArticleRef);
         
         if (!mainArticleSnap.exists()) {
+          console.warn(`記事ID ${article.id} のメインデータが見つかりません`);
           errorCount++;
           continue;
         }
         
         const mainArticleData = mainArticleSnap.data();
+        
+        console.log(`記事 "${article.title}" のスコアを計算中...`);
         
         // スコアを計算
         const newScore = calculateArticleScore(
@@ -209,7 +250,8 @@ export default function AdminDashboardClient() {
         
         // 検索用DBの記事を更新
         const articleSummaryRef = doc(searchDb, 'articleSummaries', article.id);
-        batch.update(articleSummaryRef, { articleScore: newScore });
+        currentBatch.update(articleSummaryRef, { articleScore: newScore });
+        operationsCount++;
         
         results.push({
           id: article.id,
@@ -220,40 +262,80 @@ export default function AdminDashboardClient() {
         
         processedCount++;
       } catch (error) {
+        console.error(`記事 ${article.id} の処理エラー:`, error);
         errorCount++;
       }
     }
-
-    // バッチ更新を実行
-    await batch.commit();
     
-    // 最後の更新日時を記録
-    await updateDoc(doc(searchDb, 'system', 'lastUpdated'), {
-      timestamp: Date.now()
-    });
+    // 最後のバッチをリストに追加
+    if (operationsCount > 0) {
+      batches.push(currentBatch);
+    }
+    
+    // 各バッチを順番にコミット
+    console.log(`${batches.length}個のバッチに分割して更新します`);
+    for (let i = 0; i < batches.length; i++) {
+      try {
+        console.log(`バッチ ${i+1}/${batches.length} を処理中...`);
+        await batches[i].commit();
+        console.log(`バッチ ${i+1} 完了`);
+      } catch (error) {
+        console.error(`バッチ ${i+1} の処理エラー:`, error);
+        errorCount += batchSize; // 正確な数はわからないのでバッチサイズ分をエラーとしてカウント
+      }
+    }
+    
+    // 最後の更新日時を記録 - これはオプショナルな処理として扱う
+    try {
+      const authorCountsRef = doc(searchDb, 'counts', 'author');
+      await updateDoc(authorCountsRef, {
+        lastUpdated: Date.now()
+      });
+      console.log("最終更新日時を更新しました");
+    } catch (timeUpdateError) {
+      console.warn("最終更新日時の更新はスキップします:", timeUpdateError);
+      // 処理を中断しない - これはオプショナルな操作
+    }
 
+    console.log(`記事スコア再計算完了: ${processedCount}件処理、${errorCount}件エラー`);
     return {
       processed: processedCount,
       errors: errorCount,
       results: results.slice(0, 20) as ArticleScoreResult[] // 結果の一部のみ返す
     };
+  } catch (error) {
+    console.error('記事スコア再計算の全体エラー:', error);
+    return {
+      processed: 0,
+      errors: 1,
+      results: [],
+      success: false
+    };
   }
-  
-  // 著者スコアの再計算 - APIルートからクライアントに移行
-  async function recalculateAuthorStats(): Promise<RecalculationResult> {
+}
+
+// 著者スコアの再計算 - APIルートからクライアントに移行
+async function recalculateAuthorStats(): Promise<RecalculationResult> {
+  try {
+    console.log("著者スコア統計の再計算を開始...");
     const authorCountsRef = doc(searchDb, 'counts', 'author');
     
     // すべての著者IDを取得
     const authorsQuery = query(collection(db, 'users'));
     const authorsSnapshot = await getDocs(authorsQuery);
     const authorIds = authorsSnapshot.docs.map(doc => doc.id);
+    
+    console.log(`${authorIds.length}人の著者を検出しました`);
 
     const updatedAuthors: AuthorStatsResult[] = [];
     const authorCounts: {[key: string]: any} = {};
+    let errorCount = 0;
     
     // 各著者の統計を再計算
     for (const authorId of authorIds) {
       try {
+        console.log(`著者 ${authorId} の統計を計算中...`);
+        
         // 著者の記事を検索
         const authorArticlesQuery = query(
           collection(searchDb, 'articleSummaries'),
@@ -264,6 +346,7 @@ export default function AdminDashboardClient() {
         
         if (authorArticlesSnapshot.empty) {
           // 記事がない場合はスキップ
+          console.log(`著者 ${authorId} の記事が見つかりません`);
           continue;
         }
         
@@ -282,6 +365,8 @@ export default function AdminDashboardClient() {
           usefulCount += data.usefulCount || 0;
         });
         
+        console.log(`著者 ${authorId}: ${articleCount}記事, 合計スコア: ${scoreSum}`);
+        
         // 統計を更新
         authorCounts[authorId] = {
           likeCount,
@@ -299,42 +384,78 @@ export default function AdminDashboardClient() {
         });
       } catch (error) {
         console.error(`著者 ${authorId} の統計計算エラー:`, error);
+        errorCount++;
       }
     }
     
-    // 著者カウンテータを完全に置き換え（マージしない）
-    await setDoc(authorCountsRef, {
-      counts: authorCounts,
-      lastUpdated: Date.now()
-    });
+    try {
+      console.log("著者統計をFirestoreに保存中...");
+      // 著者カウンテータを完全に置き換え（マージしない）
+      await setDoc(authorCountsRef, {
+        counts: authorCounts,
+        lastUpdated: Date.now()
+      });
+      console.log("著者統計の保存完了");
+    } catch (saveError) {
+      console.error("著者統計の保存エラー:", saveError);
+      errorCount++;
+    }
     
     return {
       processed: updatedAuthors.length,
-      errors: 0,
+      errors: errorCount,
       results: updatedAuthors.slice(0, 20) as AuthorStatsResult[] // 結果の一部のみ返す
     };
+  } catch (error) {
+    console.error('著者統計再計算の全体エラー:', error);
+    return {
+      processed: 0,
+      errors: 1,
+      results: [],
+      success: false
+    };
   }
-  
-  // トロフィーとバッジの再計算 - APIルートからクライアントに移行
-  async function recalculateTrophiesAndBadges(): Promise<RecalculationResult> {
+}
+
+// トロフィーとバッジの再計算 - APIルートからクライアントに移行
+async function recalculateTrophiesAndBadges(): Promise<RecalculationResult> {
+  try {
+    console.log("トロフィーとバッジの再計算を開始...");
+    
     // 著者の統計情報を取得
     const authorCountsRef = doc(searchDb, 'counts', 'author');
     const authorCountsDoc = await getDoc(authorCountsRef);
     
     if (!authorCountsDoc.exists()) {
+      console.warn("著者統計情報が見つかりません");
       return { processed: 0, results: [], errors: 0 };
     }
     
     const authorCounts = authorCountsDoc.data().counts || {};
     const authorIds = Object.keys(authorCounts);
     
+    console.log(`${authorIds.length}人の著者のトロフィーを計算します`);
+    
     const updatedUsers: TrophyResult[] = [];
-    const userBatch = writeBatch(db);
     let errorCount = 0;
+    
+    // バッチ処理を小さく分割
+    const batchSize = 20;
+    const batches = [];
+    let currentBatch = writeBatch(db);
+    let operationsCount = 0;
     
     // 各ユーザーのトロフィーとバッジを再計算
     for (const authorId of authorIds) {
       try {
+        // バッチサイズをチェック
+        if (operationsCount >= batchSize) {
+          batches.push(currentBatch);
+          currentBatch = writeBatch(db);
+          operationsCount = 0;
+        }
+        
+        console.log(`著者 ${authorId} のトロフィーを計算中...`);
         const authorData = authorCounts[authorId];
         
         // ユーザー統計の作成
@@ -352,6 +473,8 @@ export default function AdminDashboardClient() {
         const earnedTrophies = calculateUserTrophies(userStats);
         const availableBadges = getAvailableBadges(userStats, false);
         
+        console.log(`著者 ${authorId}: トロフィー ${earnedTrophies.length}個, バッジ ${availableBadges.length}個`);
+        
         // ユーザードキュメントを取得
         const userRef = doc(db, 'users', authorId);
         const userSnap = await getDoc(userRef);
@@ -362,12 +485,14 @@ export default function AdminDashboardClient() {
           const badgeIds = availableBadges.map(badge => badge.id);
           
           // ユーザードキュメントを更新
-          userBatch.update(userRef, {
+          currentBatch.update(userRef, {
             earnedTrophies: trophyIds,
             availableBadges: badgeIds,
             stats: userStats,
             lastUpdated: Timestamp.now()
           });
+          
+          operationsCount++;
           
           // 更新されたユーザーを記録
           updatedUsers.push({
@@ -381,6 +506,8 @@ export default function AdminDashboardClient() {
               averageScore: Math.round(userStats.averageScore * 10) / 10
             }
           });
+        } else {
+          console.warn(`ユーザー ${authorId} のドキュメントが存在しません`);
         }
       } catch (error) {
         console.error(`ユーザー ${authorId} のトロフィー計算エラー:`, error);
@@ -388,20 +515,41 @@ export default function AdminDashboardClient() {
       }
     }
     
-    // バッチ更新を実行
-    await userBatch.commit();
+    // 最後のバッチをリストに追加
+    if (operationsCount > 0) {
+      batches.push(currentBatch);
+    }
     
-    // トロフィー再計算の時刻を記録
-    await setDoc(doc(searchDb, 'system', 'trophiesLastUpdated'), {
-      timestamp: Date.now()
-    });
+    // 各バッチを順番にコミット
+    console.log(`${batches.length}個のバッチでユーザー情報を更新します`);
+    for (let i = 0; i < batches.length; i++) {
+      try {
+        console.log(`バッチ ${i+1}/${batches.length} を処理中...`);
+        await batches[i].commit();
+        console.log(`バッチ ${i+1} 完了`);
+      } catch (error) {
+        console.error(`バッチ ${i+1} の処理エラー:`, error);
+        errorCount++;
+      }
+    }
     
+    // 最終更新時刻の記録はスキップ - 不要なエラーを避ける
+    console.log(`トロフィー再計算完了: ${updatedUsers.length}人処理, ${errorCount}件のエラー`);
     return {
       processed: updatedUsers.length,
       errors: errorCount,
       results: updatedUsers.slice(0, 20) as TrophyResult[] // 結果の一部のみ返す
     };
+  } catch (error) {
+    console.error('トロフィー再計算の全体エラー:', error);
+    return {
+      processed: 0,
+      errors: 1,
+      results: [],
+      success: false
+    };
   }
+}
 
   // ローディング中は表示しない
   if (loading) {

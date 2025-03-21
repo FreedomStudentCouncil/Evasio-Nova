@@ -43,6 +43,11 @@
 │   ├── apple-touch-icon-76x76.png
 │   ├── apple-touch-icon-precomposed.png
 │   ├── apple-touch-icon.png
+│   ├── badges
+│   │   ├── admin.svg
+│   │   ├── expert.svg
+│   │   ├── helpful.svg
+│   │   └── popular.svg
 │   ├── favicon.ico
 │   ├── file.svg
 │   ├── globe.svg
@@ -75,7 +80,15 @@
 │   ├── app
 │   │   ├── 404.tsx
 │   │   ├── admin
-│   │   │   └── page.tsx
+│   │   │   ├── content
+│   │   │   │   └── page.tsx
+│   │   │   ├── dashboard
+│   │   │   │   └── page.tsx
+│   │   │   ├── page.tsx.txt
+│   │   │   ├── system
+│   │   │   │   └── page.tsx
+│   │   │   └── users
+│   │   │       └── page.tsx
 │   │   ├── evado
 │   │   │   ├── diagnostic.ts
 │   │   │   └── page.tsx
@@ -100,16 +113,24 @@
 │   │       └── view
 │   │           └── page.tsx
 │   ├── components
+│   │   ├── AdminDashboardClient.tsx
+│   │   ├── BadgeIcon.tsx
 │   │   ├── EditWikiPageClient.tsx
 │   │   ├── ImageUploader.tsx
 │   │   ├── MarkdownPreview.tsx
 │   │   ├── MarkdownRenderer.tsx
 │   │   ├── MarkdownToolbar.tsx
 │   │   ├── Navbar.tsx
+│   │   ├── ShareButton.tsx
 │   │   ├── TermsDialog.tsx
 │   │   ├── UserProfilePageClient.tsx
 │   │   ├── WikiArticleContent.tsx
-│   │   └── WikiComments.tsx
+│   │   ├── WikiArticleView.tsx
+│   │   ├── WikiComments.tsx
+│   │   └── admin
+│   │       ├── AdminContentClient.tsx
+│   │       ├── AdminSystemClient.tsx
+│   │       └── AdminUsersClient.tsx
 │   ├── context
 │   │   └── AuthContext.tsx
 │   ├── data
@@ -123,17 +144,23 @@
 │   │   ├── notification.ts
 │   │   ├── user.ts
 │   │   └── wiki.ts
+│   ├── hooks
+│   │   └── useTrophyTracker.ts
 │   ├── imgbb
 │   │   └── api.ts
 │   ├── types
+│   │   ├── custom.d.ts
 │   │   ├── notification.ts
 │   │   └── wiki.ts
 │   └── utils
+│       ├── adminFunctions.ts
 │       ├── articleScoreCalculator.ts
+│       ├── authorStatsSynchronizer.ts
 │       ├── cacheManager.ts
-│       └── draftManager.ts
+│       ├── draftManager.ts
+│       └── trophies.ts
 ├── tailwind.config.js
 ├── tree.txt
 └── tsconfig.json
 
-19 directories, 117 files
+26 directories, 137 files

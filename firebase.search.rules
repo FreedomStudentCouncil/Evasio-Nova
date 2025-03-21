@@ -42,7 +42,12 @@ service cloud.firestore {
       allow read: if true;  // タグ情報は誰でも読み取り可能
       allow write: if true; // タグ情報は誰でも書き込み可能
     }
-    
+    // システム設定
+    match /system/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
     // 検索統計データ
     match /searchStats/{statId} {
       allow read: if true;  // 統計は誰でも読み取り可能

@@ -83,6 +83,12 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAuthenticated() && isOwner(userId);
     }
+    
+    // システム設定
+    match /system/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
 
     // システム情報のルール（修正）
     match /info/{docId} {
