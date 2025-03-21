@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { Timestamp } from 'firebase/firestore';
 import { WikiArticle } from '../types/wiki';
 import { getArticleCountById } from '../firebase/wiki';
-import { FiCalendar, FiUser, FiThumbsUp, FiCheckCircle, FiEdit2 } from "react-icons/fi";
+import { FiCalendar, FiUser, FiThumbsUp, FiCheckCircle, FiEdit2, FiTag, FiThumbsDown, FiTrash2, FiAlertTriangle, FiAward } from "react-icons/fi";
 import Link from "next/link";
 import ShareButton from "./ShareButton";
 import ReactMarkdown from "react-markdown";
@@ -15,14 +15,16 @@ import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import WikiComments from './WikiComments';
 import { addNotification } from "../firebase/notification";
 import { incrementLikeCount, incrementUsefulCount } from "../firebase/wiki";
-
+import { BadgeIcon } from "./BadgeIcon";
+import { getUserProfile } from "../firebase/user";
+import { incrementDislikeCount, deleteArticle } from '../firebase/wiki';
+import {useRouter } from 'next/navigation';
 interface WikiArticleViewProps {
   article: WikiArticle;
-  isAdmin?: boolean;
 }
 
-export default function WikiArticleView({ article, isAdmin = false }: WikiArticleViewProps) {
-  const { user } = useAuth();
+export default function WikiArticleView({ article }: WikiArticleViewProps) {
+  const { user, isAdmin } = useAuth(); // isAdminを追加
   const [formattedDate, setFormattedDate] = useState<string>('');
   const [likeCount, setLikeCount] = useState(article.likeCount || 0);
   const [usefulCount, setUsefulCount] = useState(article.usefulCount || 0);
@@ -33,6 +35,13 @@ export default function WikiArticleView({ article, isAdmin = false }: WikiArticl
     type: "success" | "error";
     message: string;
   } | null>(null);
+  const [authorProfile, setAuthorProfile] = useState<{ 
+    profileImage?: string | null,
+    selectedBadge?: string | null
+  } | null>(null);
+  const [dislikedByUser, setDislikedByUser] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const router = useRouter();
 
   // 日付のフォーマット
   useEffect(() => {
@@ -101,6 +110,24 @@ export default function WikiArticleView({ article, isAdmin = false }: WikiArticl
     const interval = setInterval(fetchLatestCounts, 3000000000);
     return () => clearInterval(interval);
   }, [article.id]);
+
+  // 著者のプロフィール情報を取得
+  useEffect(() => {
+    const fetchAuthorProfile = async () => {
+      if (article?.authorId) {
+        try {
+          const profile = await getUserProfile(article.authorId);
+          setAuthorProfile({
+            profileImage: profile?.profileImage,
+            selectedBadge: profile?.selectedBadge
+          });
+        } catch (error) {
+          console.error("著者プロフィールの取得に失敗:", error);
+        }
+      }
+    };
+    fetchAuthorProfile();
+  }, [article?.authorId]);
 
   // いいね機能
   const handleLike = async () => {
@@ -206,6 +233,52 @@ export default function WikiArticleView({ article, isAdmin = false }: WikiArticl
     }
   };
 
+  // 記事を削除する処理
+  const handleDeleteArticle = async () => {
+    if (!article.id || !isAdmin) return;
+    
+    try {
+      setIsLoading(prev => ({ ...prev, delete: true }));
+      await deleteArticle(article.id);
+      router.push("/wiki"); // 削除後はWiki一覧に戻る
+    } catch (error) {
+      console.error("記事の削除に失敗しました:", error);
+      setNotification({
+        type: "error",
+        message: "記事の削除に失敗しました"
+      });
+    } finally {
+      setIsLoading(prev => ({ ...prev, delete: false }));
+    }
+  };
+
+  // 低評価を追加（管理者のみ）
+  const handleDislike = async () => {
+    if (!article.id || dislikedByUser || !isAdmin) return;
+    
+    try {
+      await incrementDislikeCount(article.id, isAdmin);
+      
+      // ローカルストレージに保存
+      const storageKey = user ? `disliked_articles_${user.uid}` : 'disliked_articles_anonymous';
+      const dislikedArticles = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      dislikedArticles.push(article.id);
+      localStorage.setItem(storageKey, JSON.stringify(dislikedArticles));
+      
+      setDislikedByUser(true);
+      setNotification({
+        type: "success",
+        message: "低評価を記録しました"
+      });
+    } catch (error) {
+      console.error("低評価の追加に失敗しました:", error);
+      setNotification({
+        type: "error",
+        message: "操作に失敗しました"
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white pt-24 pb-12">
       <div className="container mx-auto px-4">
@@ -217,41 +290,97 @@ export default function WikiArticleView({ article, isAdmin = false }: WikiArticl
         >
           {/* 記事コンテンツ */}
           <div className="bg-white shadow-lg rounded-xl overflow-hidden">
+            {/* 管理者バッジ */}
+            {isAdmin && (
+              <div className="mb-4 bg-amber-500/20 border border-amber-500/30 rounded-lg p-3 flex items-center justify-between">
+                <div className="flex items-center">
+                  <FiAlertTriangle className="text-amber-400 mr-2" />
+                  <span className="text-amber-300">管理者モード - このセクションは管理者にのみ表示されます</span>
+                </div>
+                <div className="flex gap-2">
+                  <Link href={`/wiki/edit?id=${article.id}`}>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="bg-blue-500/30 text-blue-300 hover:bg-blue-500/40 rounded-lg px-3 py-1 flex items-center"
+                    >
+                      <FiEdit2 className="mr-1" /> 編集
+                    </motion.button>
+                  </Link>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="bg-red-500/30 text-red-300 hover:bg-red-500/40 rounded-lg px-3 py-1 flex items-center"
+                  >
+                    <FiTrash2 className="mr-1" /> 削除
+                  </motion.button>
+                </div>
+              </div>
+            )}
+
             {/* 記事ヘッダー */}
             <div className="p-6 border-b border-gray-200">
               <h1 className="text-2xl md:text-3xl font-bold mb-3 text-gray-800">{article.title}</h1>
               <div className="text-gray-600 mb-4">{article.description}</div>
+
+              <div className="flex flex-wrap gap-2 mb-6">
+                {article.tags && article.tags.map(tag => (
+                  <Link href={`/wiki?tag=${tag}`} key={tag}>
+                    <span className="bg-blue-500/20 text-blue-600 text-sm rounded-full px-3 py-1 flex items-center hover:bg-blue-500/30 transition-colors">
+                      <FiTag className="mr-1" size={14} />
+                      {tag}
+                    </span>
+                  </Link>
+                ))}
+              </div>
               
-              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
-                <div className="flex items-center">
-                  <FiCalendar className="mr-1" />
-                  <span>{formattedDate}</span>
-                </div>
+              <div className="flex flex-wrap justify-between items-center text-sm text-gray-500">
                 <Link href={`/wiki/user?id=${article.authorId}`}>
-                  <div className="flex items-center text-blue-600 hover:text-blue-800">
-                    <FiUser className="mr-1" />
-                    <span>{article.author}</span>
+                  <div className="flex items-center hover:text-blue-600 transition-colors">
+                    <div className="relative mr-4">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden">
+                        {authorProfile?.profileImage ? (
+                          <img
+                            src={authorProfile.profileImage}
+                            alt={article.author || "ユーザー"}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <FiUser className="text-lg text-white" />
+                        )}
+                      </div>
+                      
+                      {/* バッジ表示 */}
+                      {authorProfile?.selectedBadge && (
+                        <div className="absolute -bottom-1 -right-2 w-5 h-5 rounded-full bg-slate-800/90 border border-slate-700 flex items-center justify-center">
+                          <BadgeIcon 
+                            badgeId={authorProfile.selectedBadge} 
+                            size="sm"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <span>{article.author || "不明なユーザー"}</span>
                   </div>
                 </Link>
-                <div className="flex items-center">
-                  <FiThumbsUp className="mr-1" />
-                  <span>いいね {likeCount}</span>
+
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center">
+                    <FiCalendar className="mr-1" />
+                    <span>{formattedDate}</span>
+                  </div>
+                  {isAdmin && (
+                    <Link 
+                      href={`/wiki/edit/${article.id}`}
+                      className="text-blue-600 hover:text-blue-800 flex items-center"
+                    >
+                      <FiEdit2 className="mr-1" />
+                      <span>編集</span>
+                    </Link>
+                  )}
+                  <ShareButton title={article.title} />
                 </div>
-                <div className="flex items-center">
-                  <FiCheckCircle className="mr-1" />
-                  <span>使えた！ {usefulCount}</span>
-                </div>
-                {isAdmin && (
-                  <Link 
-                    href={`/wiki/edit/${article.id}`}
-                    className="ml-auto text-blue-600 hover:text-blue-800 flex items-center"
-                  >
-                    <FiEdit2 className="mr-1" />
-                    <span>編集</span>
-                  </Link>
-                )}
-                <div className="flex-grow"></div>
-                <ShareButton title={article.title} />
               </div>
             </div>
             
@@ -263,6 +392,25 @@ export default function WikiArticleView({ article, isAdmin = false }: WikiArticl
                   alt={article.title} 
                   className="w-full h-full object-cover" 
                 />
+              </div>
+            )}
+
+            {/* 記事スコアの表示 - 管理者のみに表示 */}
+            {isAdmin && article.articleScore !== undefined && (
+              <div className="mb-4 flex items-center">
+                <FiAward className="text-yellow-400 mr-2" />
+                <div className="flex-1">
+                  <div className="bg-blue-900/30 rounded-full h-2 w-full">
+                    <div 
+                      className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full" 
+                      style={{ width: `${Math.min(100, article.articleScore)}%` }}
+                    ></div>
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>記事スコア (管理者のみ表示)</span>
+                    <span>{article.articleScore}/100</span>
+                  </div>
+                </div>
               </div>
             )}
             
@@ -317,6 +465,24 @@ export default function WikiArticleView({ article, isAdmin = false }: WikiArticl
             {/* 記事評価フッター */}
             <div className="p-6 bg-gray-50 border-t border-gray-200">
               <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
+                {/* 管理者用評価情報とボタン */}
+                {isAdmin && (
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleDislike}
+                    disabled={dislikedByUser}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                      dislikedByUser 
+                        ? 'bg-gray-500/40 text-gray-300 cursor-default' 
+                        : 'bg-gray-500/20 hover:bg-gray-500/30 text-gray-400'
+                    }`}
+                  >
+                    <FiThumbsDown />
+                    <span>低評価</span>
+                  </motion.button>
+                )}
+                
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -390,6 +556,41 @@ export default function WikiArticleView({ article, isAdmin = false }: WikiArticl
                   <span>{notification.message}</span>
                 </div>
               </motion.div>
+            )}
+
+            {/* 削除確認ダイアログ */}
+            {showDeleteConfirm && (
+              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                <motion.div 
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="bg-slate-800 rounded-xl p-6 max-w-md w-full"
+                >
+                  <h3 className="text-xl font-bold mb-4 text-red-400">記事を削除しますか？</h3>
+                  <p className="mb-6 text-slate-300">
+                    この操作は取り消せません。記事「{article.title}」を本当に削除しますか？
+                  </p>
+                  <div className="flex justify-end gap-3">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg"
+                    >
+                      キャンセル
+                    </motion.button>
+                    
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleDeleteArticle}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white"
+                    >
+                      削除する
+                    </motion.button>
+                  </div>
+                </motion.div>
+              </div>
             )}
           </div>
           
