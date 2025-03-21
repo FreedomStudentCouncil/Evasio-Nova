@@ -2,13 +2,13 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { FiSave, FiX, FiImage, FiArrowLeft, FiTag, FiAlertCircle, FiChevronLeft, FiChevronRight, FiShield, FiCode, FiEye } from "react-icons/fi";
+import { FiSave, FiX, FiImage, FiArrowLeft, FiTag, FiAlertCircle, FiChevronLeft, FiChevronRight, FiShield, FiCode, FiEye, FiTrash2 } from "react-icons/fi";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "../context/AuthContext";
 import ImageUploader from "./ImageUploader";
 import MarkdownPreview from "./MarkdownPreview";
-import { getArticleById, updateArticle, WikiArticle, getAllTags, updateTags, decrementTags, Tag } from "../firebase/wiki";
+import { getArticleById, updateArticle, deleteArticle, WikiArticle, getAllTags, updateTags, decrementTags, Tag } from "../firebase/wiki";
 import { deleteImage } from "../imgbb/api";
 import MarkdownToolbar from "./MarkdownToolbar";
 
@@ -48,6 +48,10 @@ export default function EditWikiPageClient() {
   }>({});
   // エディタモードのステートを追加
   const [editorMode, setEditorMode] = useState<'raw' | 'preview'>('raw');
+
+  // 削除確認モーダルのステート
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // 全角文字を考慮した文字数カウント関数を修正
   const countFullWidthChars = (str: string): number => {
@@ -401,6 +405,21 @@ export default function EditWikiPageClient() {
       setError("記事の更新に失敗しました。もう一度お試しください。");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // 削除処理を追加
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteArticle(articleId);
+      router.push('/wiki');
+    } catch (error) {
+      console.error('記事削除エラー:', error);
+      setError('記事の削除に失敗しました。もう一度お試しください。');
+      setShowDeleteModal(false);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -799,8 +818,21 @@ export default function EditWikiPageClient() {
                 <p className="text-red-400 text-sm mt-1">{validationErrors.content}</p>
               )}
               
-              {/* ボタン */}
+              {/* ボタンセクションを更新 */}
               <div className="flex flex-col sm:flex-row gap-4">
+                {/* 削除ボタン - 記事所有者の場合のみ表示 */}
+                {isOwner && (
+                  <motion.button
+                    type="button"
+                    onClick={() => setShowDeleteModal(true)}
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="flex-1 py-3 bg-red-500/20 text-red-300 rounded-lg font-semibold hover:bg-red-500/30 transition-all duration-300 flex items-center justify-center"
+                  >
+                    <FiTrash2 className="mr-2" /> 記事を削除
+                  </motion.button>
+                )}
+
                 <motion.button
                   type="submit"
                   disabled={isSubmitting}
@@ -827,6 +859,43 @@ export default function EditWikiPageClient() {
           </motion.div>
         </div>
       </div>
+
+      {/* 削除確認モーダル */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-slate-800 rounded-xl border border-white/10 p-6 max-w-md w-full"
+          >
+            <h3 className="text-xl font-bold mb-4">記事を削除しますか？</h3>
+            <p className="text-slate-300 mb-6">
+              この操作は取り消せません。記事を削除すると、すべてのコメントとデータが完全に削除されます。
+            </p>
+            <div className="flex gap-4">
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className={`flex-1 py-3 bg-red-500 rounded-lg font-semibold
+                  ${isDeleting ? 'opacity-70 cursor-not-allowed' : 'hover:bg-red-600'}`}
+              >
+                {isDeleting ? '削除中...' : '削除する'}
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setShowDeleteModal(false)}
+                disabled={isDeleting}
+                className="flex-1 py-3 bg-white/10 rounded-lg font-semibold hover:bg-white/20"
+              >
+                キャンセル
+              </motion.button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
