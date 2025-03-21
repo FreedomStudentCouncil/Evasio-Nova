@@ -399,7 +399,7 @@ export default function WikiArticleContent() {
                 
                 {/* バッジ表示を追加 */}
                 {authorProfile?.selectedBadge && (
-                  <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-slate-800/90 border border-slate-700 flex items-center justify-center">
+                  <div className="absolute -bottom-1 -right-2 w-5 h-5 rounded-full bg-slate-800/90 border border-slate-700 flex items-center justify-center">
                     <BadgeIcon 
                       badgeId={authorProfile.selectedBadge} 
                       size="sm"
