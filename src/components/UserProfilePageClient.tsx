@@ -61,12 +61,11 @@ export default function UserProfilePageClient() {
   const isOwnProfile = user?.uid === userId;
 
   // トロフィートラッカーフックの呼び出しを条件付きではなく常に呼び出す
-  // パラメータの方で実行を制御する
   const { earnedTrophies, availableBadges, newTrophies, clearNewTrophies } = useTrophyTracker({
-    userId,
+    userId: userId, // ここを明示的にuserIdを指定
     userStats,
     isAdmin,
-    isActive: isOwnProfile // 自分のプロフィールページでのみ有効
+    isActive: true // 常にアクティブに変更
   });
   
   // 外部クリック検出のための効果
@@ -672,7 +671,7 @@ export default function UserProfilePageClient() {
                   <div 
                     key={trophy.id}
                     className={`bg-white/5 border border-white/10 rounded-lg p-4 flex items-start gap-3 ${
-                      newTrophies.some(t => t.id === trophy.id) ? 'animate-pulse border-yellow-500/50' : ''
+                      isOwnProfile && newTrophies.some(t => t.id === trophy.id) ? 'animate-pulse border-yellow-500/50' : ''
                     }`}
                   >
                     <div className={`${trophy.color} text-xl flex-shrink-0 mt-0.5`}>
@@ -686,7 +685,7 @@ export default function UserProfilePageClient() {
                             Lv.{trophy.level}
                           </span>
                         )}
-                        {newTrophies.some(t => t.id === trophy.id) && (
+                        {isOwnProfile && newTrophies.some(t => t.id === trophy.id) && (
                           <span className="text-xs bg-yellow-500/30 text-yellow-300 px-1.5 py-0.5 rounded-full ml-1">
                             NEW
                           </span>
