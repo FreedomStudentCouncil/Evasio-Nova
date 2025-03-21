@@ -192,6 +192,8 @@ export default function AdminContentClient() {
   // 記事に低評価をつける
   const dislikeArticle = async (article: ArticleSummary) => {
     try {
+      if (!article.id) return;
+      
       await incrementDislikeCount(article.id, true);
       
       // 画面の記事リストを更新

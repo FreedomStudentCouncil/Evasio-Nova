@@ -278,3 +278,113 @@ export class CacheManager {
 
 // シングルトンインスタンスをエクスポート
 export const cacheManager = new CacheManager();
+
+/**
+ * キャッシュ管理ユーティリティ
+ */
+
+// キャッシュ保存期間（ミリ秒）
+const CACHE_DURATION = 60 * 1000; // 1分間
+
+// キャッシュデータの型定義
+interface CacheItem<T> {
+  value: T;
+  timestamp: number;
+}
+
+// キャッシュストア
+const cacheStore: {
+  [key: string]: CacheItem<any>;
+} = {};
+
+/**
+ * キャッシュにデータを保存
+ * @param key キャッシュキー
+ * @param value 保存する値
+ */
+export function setCache<T>(key: string, value: T): void {
+  cacheStore[key] = {
+    value,
+    timestamp: Date.now()
+  };
+}
+
+/**
+ * キャッシュからデータを取得
+ * @param key キャッシュキー
+ * @returns キャッシュされた値（有効期限切れまたは未キャッシュの場合はnull）
+ */
+export function getCache<T>(key: string): T | null {
+  const item = cacheStore[key];
+  
+  // キャッシュが存在しない場合はnull
+  if (!item) return null;
+  
+  // 有効期限切れの場合はキャッシュを削除してnull
+  const now = Date.now();
+  if (now - item.timestamp > CACHE_DURATION) {
+    deleteCache(key);
+    return null;
+  }
+  
+  return item.value as T;
+}
+
+/**
+ * キャッシュを削除
+ * @param key キャッシュキー
+ */
+export function deleteCache(key: string): void {
+  delete cacheStore[key];
+}
+
+/**
+ * 特定のパターンに一致するキャッシュをすべて削除
+ * @param pattern キャッシュキーのパターン（前方一致）
+ */
+export function clearCacheByPattern(pattern: string): void {
+  Object.keys(cacheStore).forEach(key => {
+    if (key.startsWith(pattern)) {
+      deleteCache(key);
+    }
+  });
+}
+
+/**
+ * すべてのキャッシュを削除
+ */
+export function clearAllCache(): void {
+  Object.keys(cacheStore).forEach(key => {
+    deleteCache(key);
+  });
+}
+
+/**
+ * キャッシュ対応の関数を生成する高階関数
+ * @param fn 元の関数
+ * @param keyPrefix キャッシュキーのプレフィックス
+ * @returns キャッシュ対応の新しい関数
+ */
+export function withCache<T, Args extends any[]>(
+  fn: (...args: Args) => Promise<T>,
+  keyPrefix: string
+): (...args: Args) => Promise<T> {
+  return async (...args: Args): Promise<T> => {
+    // 引数を使ってキャッシュキーを生成
+    const key = `${keyPrefix}:${JSON.stringify(args)}`;
+    
+    // キャッシュからデータを取得
+    const cachedData = getCache<T>(key);
+    if (cachedData !== null) {
+      return cachedData;
+    }
+    
+    // キャッシュにない場合は関数を実行
+    const result = await fn(...args);
+    
+    // 結果をキャッシュに保存
+    setCache(key, result);
+    
+    return result;
+  };
+}

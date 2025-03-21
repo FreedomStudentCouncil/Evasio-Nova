@@ -2,22 +2,22 @@ import { Timestamp, FieldValue } from 'firebase/firestore';
 
 // Wiki記事の型定義 - メインDBに保存する完全な記事情報
 export interface WikiArticle {
-  id?: string;
+  id: string;
   title: string;
-  description: string;
   content: string;
-  tags: string[];
   author: string;
   authorId: string;
+  date: any; // Timestamp | string | null
+  lastUpdated?: any; // Timestamp | string | null
+  tags?: string[];
   imageUrl?: string;
   imageId?: string;
-  date: Timestamp | string;
-  lastUpdated?: Timestamp | FieldValue;
-  usefulCount: number;
-  likeCount: number;
-  dislikeCount?: number; // 管理者のみが見える低評価カウント
   deleteUrl?: string;
-  articleScore?: number; // 記事の評価スコアを追加
+  description?: string;
+  likeCount?: number;
+  usefulCount?: number;
+  dislikeCount?: number;
+  articleScore?: number;
 }
 
 // 検索用DB用の記事概要型定義

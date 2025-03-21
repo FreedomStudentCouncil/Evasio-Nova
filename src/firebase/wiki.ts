@@ -21,6 +21,7 @@ import {
 import { db, searchDb, getSearchDb } from './config';
 import { calculateArticleScore } from '../utils/articleScoreCalculator';
 import { cacheManager } from '../utils/cacheManager'; // cacheManagerをインポート
+import { withCache } from '../utils/cacheManager';
 
 // Wiki記事の型定義 - メインDBに保存する完全な記事情報
 export interface WikiArticle {
@@ -601,6 +602,11 @@ export async function incrementUsefulCount(id: string): Promise<void> {
         lastUpdated: Date.now()
       });
     }
+
+    // キャッシュをクリア
+    import('../utils/cacheManager').then(cache => {
+      cache.deleteCache(`article-counts:["${id}"]`);
+    });
   } catch (error) {
     console.error('役に立ったカウント更新エラー:', error);
     throw error;
@@ -743,6 +749,11 @@ export async function incrementLikeCount(id: string): Promise<void> {
         lastUpdated: Date.now()
       });
     }
+
+    // キャッシュをクリア
+    import('../utils/cacheManager').then(cache => {
+      cache.deleteCache(`article-counts:["${id}"]`);
+    });
   } catch (error) {
     console.error('いいねカウント更新エラー:', error);
     throw error;
@@ -830,6 +841,11 @@ export async function incrementDislikeCount(id: string, isAdmin: boolean = false
         lastUpdated: Date.now() // キャッシュ有効期限の起点
       });
     }
+
+    // キャッシュをクリア
+    import('../utils/cacheManager').then(cache => {
+      cache.deleteCache(`article-counts:["${id}"]`);
+    });
   } catch (error) {
     console.error('低評価カウント更新エラー:', error);
     throw error;
@@ -1140,7 +1156,7 @@ export async function getArticleCounts(): Promise<{ [articleId: string]: { likeC
 }
 
 // 特定の記事のカウント情報を取得（キャッシュを使わない、常に最新）
-export async function getArticleCountById(articleId: string): Promise<{ likeCount: number; usefulCount: number; dislikeCount?: number }> {
+export async function _getArticleCountById(articleId: string): Promise<{ likeCount: number; usefulCount: number; dislikeCount: number }> {
   try {
     // 記事概要からカウントを取得（最も信頼性の高いソース）
     const articleSummaryRef = doc(searchDb, 'articleSummaries', articleId);
@@ -1163,6 +1179,9 @@ export async function getArticleCountById(articleId: string): Promise<{ likeCoun
     return { likeCount: 0, usefulCount: 0, dislikeCount: 0 };
   }
 }
+
+// キャッシュ対応バージョンをエクスポート
+export const getArticleCountById = withCache(_getArticleCountById, 'article-counts');
 
 // 新しい関数: 著者のカウント情報を取得
 export async function getAuthorCounts(): Promise<{ [authorId: string]: { likeCount: number; usefulCount: number } }> {

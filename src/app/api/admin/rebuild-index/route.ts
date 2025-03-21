@@ -76,6 +76,9 @@ async function rebuildSearchIndex() {
     const articleData = docSnapshot.data();
     const articleId = docSnapshot.id;
     
+    // IDが存在しない場合はスキップ
+    if (!articleId) continue;
+    
     // 記事スコアを計算
     const score = calculateArticleScore(
       articleData.content || '',

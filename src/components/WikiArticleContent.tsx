@@ -70,6 +70,10 @@ export default function WikiArticleContent({ article, createdAt }: WikiArticleCo
     };
     
     fetchLatestCounts();
+    
+    // 30秒ごとに最新のカウントを取得
+    const interval = setInterval(fetchLatestCounts, 30000);
+    return () => clearInterval(interval);
   }, [article.id]);
 
   // いいね機能
