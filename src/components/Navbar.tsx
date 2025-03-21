@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { FiMenu, FiX, FiHome, FiBook, FiHelpCircle, FiUser, FiLogOut, FiLogIn, FiBell } from "react-icons/fi";
+import { FiMenu, FiX, FiHome, FiBook, FiHelpCircle, FiUser, FiLogOut, FiLogIn, FiBell, FiShield } from "react-icons/fi";
 import { useAuth } from "../context/AuthContext";
 import {getUserNotifications} from "../firebase/notification";
 
@@ -12,6 +12,7 @@ export default function Navbar() {
   const { user, signOut } = useAuth();
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
+  const isAdmin = user && user.email === "egnm9stasshe@gmail.com"; // 管理者判定の例
   
   // 画面幅が変更された時にメニューを閉じる
   useEffect(() => {
@@ -73,6 +74,15 @@ export default function Navbar() {
               <NavLink href="/" icon={<FiHome />} text="ホーム" isActive={isActive("/")} />
               <NavLink href="/wiki" icon={<FiBook />} text="Wiki" isActive={isActive("/wiki")} />
               <NavLink href="/evado" icon={<FiHelpCircle />} text="診断" isActive={isActive("/evado")} />
+              {/* 管理者ダッシュボードリンクを追加 */}
+              {user && isAdmin && (
+                <NavLink 
+                  href="/admin/dashboard" 
+                  icon={<FiShield />} 
+                  text="管理者" 
+                  isActive={isActive("/admin")} 
+                />
+              )}
             </div>
             
             {user && (
@@ -152,6 +162,17 @@ export default function Navbar() {
           <NavLink href="/" icon={<FiHome />} text="ホーム" isActive={isActive("/")} mobile />
           <NavLink href="/wiki" icon={<FiBook />} text="Wiki" isActive={isActive("/wiki")} mobile />
           <NavLink href="/evado" icon={<FiHelpCircle />} text="診断" isActive={isActive("/evado")} mobile />
+          
+          {/* 管理者ダッシュボードリンクをモバイルにも追加 */}
+          {user && isAdmin && (
+            <NavLink 
+              href="/admin/dashboard" 
+              icon={<FiShield />} 
+              text="管理者ダッシュボード" 
+              isActive={isActive("/admin")} 
+              mobile 
+            />
+          )}
           
           <div className="border-t border-white/10 my-2 pt-2">
             {user && (

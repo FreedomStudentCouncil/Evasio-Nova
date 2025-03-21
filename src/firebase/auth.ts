@@ -28,13 +28,14 @@ const ADMIN_EMAILS = [
 ];
 
 /**
- * ユーザーが管理者かどうかを判定する
+ * メールアドレスで管理者かどうかを判定
  * @param email ユーザーのメールアドレス
- * @returns 管理者の場合true、それ以外はfalse
+ * @returns 管理者かどうか
  */
 export function isAdmin(email: string | null | undefined): boolean {
-  if (!email) return false;
-  return ADMIN_EMAILS.includes(email.toLowerCase());
+  // 指定された管理者メールアドレスと一致するかチェック
+  const adminEmail = "egnm9stasshe@gmail.com";
+  return email === adminEmail;
 }
 
 /**

@@ -84,28 +84,28 @@ export const allTrophies: Trophy[] = [
   {
     id: 'popular-author',
     title: '人気の著者',
-    description: '累計50いいねを獲得しました',
+    description: '累計20いいねを獲得しました',
     icon: FiHeart,
     color: 'text-pink-500',
-    condition: (stats) => stats.likeCount >= 50,
+    condition: (stats) => stats.likeCount >= 20,
     level: 2
   },
   {
     id: 'like-superstar',
     title: 'いいねスーパースター',
-    description: '累計100いいねを獲得しました',
+    description: '累計50いいねを獲得しました',
     icon: HiOutlineHeart,
     color: 'text-pink-600',
-    condition: (stats) => stats.likeCount >= 100,
+    condition: (stats) => stats.likeCount >= 50,
     level: 3
   },
   {
     id: 'like-legend',
     title: 'いいねレジェンド',
-    description: '累計200いいねを獲得しました',
+    description: '累計100いいねを獲得しました',
     icon: HiOutlineFire,
     color: 'text-red-500',
-    condition: (stats) => stats.likeCount >= 200,
+    condition: (stats) => stats.likeCount >= 100,
     level: 4
   },
   
@@ -151,37 +151,37 @@ export const allTrophies: Trophy[] = [
   {
     id: 'quality-content',
     title: '高品質コンテンツ',
-    description: '平均評価値が3.5以上です',
+    description: '平均評価値が70点以上です',
     icon: FiStar,
     color: 'text-yellow-400',
-    condition: (stats) => stats.averageScore >= 3.5 && stats.articleCount >= 2,
+    condition: (stats) => stats.averageScore >= 70 && stats.articleCount >= 2,
     level: 1
   },
   {
     id: 'high-quality',
     title: '優れた品質',
-    description: '平均評価値が4.0以上です',
+    description: '平均評価値が80点以上です',
     icon: HiOutlineStar,
     color: 'text-yellow-500',
-    condition: (stats) => stats.averageScore >= 4.0 && stats.articleCount >= 3,
+    condition: (stats) => stats.averageScore >= 80 && stats.articleCount >= 3,
     level: 2
   },
   {
     id: 'quality-expert',
     title: '品質エキスパート',
-    description: '平均評価値が4.5以上です',
+    description: '平均評価値が90点以上です',
     icon: FiAward,
     color: 'text-yellow-600',
-    condition: (stats) => stats.averageScore >= 4.5 && stats.articleCount >= 5,
+    condition: (stats) => stats.averageScore >= 90 && stats.articleCount >= 5,
     level: 3
   },
   {
     id: 'quality-legend',
     title: '品質レジェンド',
-    description: '平均評価値が4.8以上です',
+    description: '平均評価値が95点以上です',
     icon: HiOutlineSparkles,
     color: 'text-amber-600',
-    condition: (stats) => stats.averageScore >= 4.8 && stats.articleCount >= 5,
+    condition: (stats) => stats.averageScore >= 95 && stats.articleCount >= 5,
     level: 4
   },
   
@@ -192,7 +192,7 @@ export const allTrophies: Trophy[] = [
     description: '評価値とコンテンツ数のバランスが優れています',
     icon: FiTrendingUp,
     color: 'text-cyan-400',
-    condition: (stats) => stats.averageScore >= 4.0 && stats.articleCount >= 3 && stats.likeCount >= 15,
+    condition: (stats) => stats.averageScore >= 80 && stats.articleCount >= 3 && stats.likeCount >= 15,
     level: 2
   },
   {
@@ -217,7 +217,7 @@ export const allTrophies: Trophy[] = [
       stats.articleCount >= 10 && 
       stats.likeCount >= 50 && 
       stats.usefulCount >= 40 && 
-      stats.averageScore >= 4.0,
+      stats.averageScore >= 80,
     level: 4
   },
   {
@@ -230,7 +230,7 @@ export const allTrophies: Trophy[] = [
       stats.articleCount >= 15 && 
       stats.likeCount >= 75 && 
       stats.usefulCount >= 50 && 
-      stats.averageScore >= 4.5,
+      stats.averageScore >= 90,
     level: 5
   }
 ];

@@ -10,6 +10,7 @@ interface AuthContextType {
   isEmailVerified: boolean; // 追加
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  getIdToken: () => Promise<string | null>; // 追加: IDトークンを取得するメソッド
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -33,8 +34,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // 認証状態変更リスナーを設定
       const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
         setUser(currentUser);
-        // ユーザーのメールアドレスを使って管理者かどうかを判定
-        setIsUserAdmin(currentUser ? isAdmin(currentUser.email) : false);
+        // メールアドレスベースで管理者判定
+        const adminEmail = "egnm9stasshe@gmail.com"; // 指定の管理者メールアドレス
+        setIsUserAdmin(currentUser?.email === adminEmail);
         setIsEmailVerified(currentUser?.emailVerified ?? false); // 追加
         setLoading(false);
       });
@@ -63,13 +65,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  // IDトークンを取得するメソッドを追加
+  const getIdToken = async (): Promise<string | null> => {
+    if (!user) return null;
+    try {
+      return await user.getIdToken();
+    } catch (error) {
+      console.error('トークン取得エラー:', error);
+      return null;
+    }
+  };
+
   const value = {
     user,
     loading,
     isAdmin: isUserAdmin, // 管理者フラグを提供
     isEmailVerified, // 追加
     signInWithGoogle,
-    signOut
+    signOut,
+    getIdToken // 追加したメソッドを公開
   };
 
   return (
