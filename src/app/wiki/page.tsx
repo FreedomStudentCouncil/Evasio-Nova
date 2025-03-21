@@ -8,6 +8,8 @@ import { getAllArticles, WikiArticle, getArticleById, getAllArticleSummaries } f
 import { getUserProfile } from "../../firebase/user";
 import { cacheManager } from "../../utils/cacheManager";
 import { ArticleSummary } from "../../types/wiki";
+import { BadgeIcon } from "../../components/BadgeIcon"; // バッジアイコンコンポーネントをインポート
+import { allBadges } from "../../utils/trophies"; // バッジデータをインポート
 
 export default function WikiPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -17,7 +19,10 @@ export default function WikiPage() {
   const [wikiArticles, setWikiArticles] = useState<WikiArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [allTags, setAllTags] = useState<string[]>([]);
-  const [userProfiles, setUserProfiles] = useState<{[key: string]: { profileImage?: string | null }}>({});
+  const [userProfiles, setUserProfiles] = useState<{[key: string]: { 
+    profileImage?: string | null,
+    selectedBadge?: string | null  // selectedBadgeプロパティを追加
+  }}>({});
   const [currentPage, setCurrentPage] = useState(1);
   const articlesPerPage = 12;
   
@@ -41,7 +46,10 @@ export default function WikiPage() {
       if (profile) {
         setUserProfiles(prev => ({
           ...prev,
-          [userId]: profile
+          [userId]: {
+            profileImage: profile.profileImage,
+            selectedBadge: profile.selectedBadge
+          }
         }));
       }
     } catch (error) {
@@ -373,15 +381,27 @@ export default function WikiPage() {
                     
                     <div className="flex justify-between items-center text-sm text-slate-300">
                       <span className="flex items-center">
-                        <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden mr-2">
-                          {article.authorId && userProfiles[article.authorId]?.profileImage ? (
-                            <img
-                              src={userProfiles[article.authorId].profileImage || ""}
-                              alt={article.author || "ユーザー"}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <FiUser size={14} />
+                        <div className="relative mr-3"> {/* mr-2からmr-3に変更 */}
+                          <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden">
+                            {article.authorId && userProfiles[article.authorId]?.profileImage ? (
+                              <img
+                                src={userProfiles[article.authorId].profileImage || ""}
+                                alt={article.author || "ユーザー"}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <FiUser size={14} />
+                            )}
+                          </div>
+                          
+                          {/* バッジ表示を追加 */}
+                          {article.authorId && userProfiles[article.authorId]?.selectedBadge && (
+                            <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
+                              <BadgeIcon 
+                                badgeId={userProfiles[article.authorId].selectedBadge || ""} 
+                                size="xs"
+                              />
+                            </div>
                           )}
                         </div>
                         {article.author}

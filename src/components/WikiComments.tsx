@@ -27,6 +27,8 @@ import {
 import { User } from "firebase/auth";
 import { getUserProfile } from "../firebase/user";
 import { addNotification } from "../firebase/notification";
+import { BadgeIcon } from "./BadgeIcon"; // バッジアイコンコンポーネントをインポート
+import { allBadges } from "../utils/trophies"; // バッジデータをインポート
 
 interface WikiCommentsProps {
   articleId: string;
@@ -54,7 +56,10 @@ export default function WikiComments({ articleId, user, articleTitle, articleAut
   const [hasMoreReplies, setHasMoreReplies] = useState<{[key: string]: boolean}>({});
   // いいね済みコメントを記録する状態
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
-  const [userProfiles, setUserProfiles] = useState<{[key: string]: { profileImage?: string | null }}>({});
+  const [userProfiles, setUserProfiles] = useState<{[key: string]: { 
+    profileImage?: string | null,
+    selectedBadge?: string | null  // selectedBadgeプロパティを追加
+  }}>({});
 
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
@@ -446,7 +451,7 @@ export default function WikiComments({ articleId, user, articleTitle, articleAut
     return '日付なし';
   };
 
-  // ユーザープロフィールを取得する関数
+  // ユーザープロフィールを取得する関数 - バッジ情報も取得するように修正
   const fetchUserProfile = async (userId: string) => {
     if (!userId || userProfiles[userId]) return;
     
@@ -455,7 +460,10 @@ export default function WikiComments({ articleId, user, articleTitle, articleAut
       if (profile) {
         setUserProfiles(prev => ({
           ...prev,
-          [userId]: profile
+          [userId]: {
+            profileImage: profile.profileImage,
+            selectedBadge: profile.selectedBadge  // バッジ情報を追加
+          }
         }));
       }
     } catch (error) {
@@ -549,15 +557,27 @@ export default function WikiComments({ articleId, user, articleTitle, articleAut
                 {/* コメントヘッダー */}
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex items-center">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden mr-3">
-                      {comment.authorId && userProfiles[comment.authorId]?.profileImage ? (
-                        <img
-                          src={userProfiles[comment.authorId].profileImage || ""}
-                          alt={comment.author || "ユーザー"}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <FiUser size={18} />
+                    <div className="relative mr-4"> {/* mr-3からmr-4に変更 */}
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden">
+                        {comment.authorId && userProfiles[comment.authorId]?.profileImage ? (
+                          <img
+                            src={userProfiles[comment.authorId].profileImage || ""}
+                            alt={comment.author || "ユーザー"}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <FiUser size={18} />
+                        )}
+                      </div>
+                      
+                      {/* バッジ表示を追加 */}
+                      {comment.authorId && userProfiles[comment.authorId]?.selectedBadge && (
+                        <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-slate-800/90 border border-slate-700 flex items-center justify-center">
+                          <BadgeIcon 
+                            badgeId={userProfiles[comment.authorId].selectedBadge || ""} 
+                            size="xs"
+                          />
+                        </div>
                       )}
                     </div>
                     <div>
@@ -679,15 +699,27 @@ export default function WikiComments({ articleId, user, articleTitle, articleAut
                           <div key={reply.id} className="bg-white/5 rounded-lg p-3">
                             <div className="flex justify-between items-start mb-2">
                               <div className="flex items-center">
-                                <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden mr-2">
-                                  {reply.authorId && userProfiles[reply.authorId]?.profileImage ? (
-                                    <img
-                                      src={userProfiles[reply.authorId].profileImage || ""}
-                                      alt={reply.author || "ユーザー"}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <FiUser size={14} />
+                                <div className="relative mr-3"> {/* mr-2からmr-3に変更 */}
+                                  <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden">
+                                    {reply.authorId && userProfiles[reply.authorId]?.profileImage ? (
+                                      <img
+                                        src={userProfiles[reply.authorId].profileImage || ""}
+                                        alt={reply.author || "ユーザー"}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    ) : (
+                                      <FiUser size={14} />
+                                    )}
+                                  </div>
+                                  
+                                  {/* バッジ表示を追加 */}
+                                  {reply.authorId && userProfiles[reply.authorId]?.selectedBadge && (
+                                    <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-slate-800/90 border border-slate-700 flex items-center justify-center">
+                                      <BadgeIcon 
+                                        badgeId={userProfiles[reply.authorId].selectedBadge || ""} 
+                                        size="2xs"
+                                      />
+                                    </div>
                                   )}
                                 </div>
                                 <div>

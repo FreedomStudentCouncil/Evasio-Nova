@@ -32,6 +32,8 @@ import { useAuth } from "../context/AuthContext";
 import WikiComments from "./WikiComments";
 import { getUserProfile } from "../firebase/user";
 import { cacheManager } from "../utils/cacheManager"; 
+import { BadgeIcon } from "./BadgeIcon"; // バッジアイコンコンポーネントをインポート
+import { allBadges } from "../utils/trophies"; // バッジデータをインポート
 
 // IDを受け取らないように変更
 export default function WikiArticleContent() {
@@ -47,7 +49,10 @@ export default function WikiArticleContent() {
   const [likedByUser, setLikedByUser] = useState(false);
   const [usefulMarkedByUser, setUsefulMarkedByUser] = useState(false);
   const [dislikedByUser, setDislikedByUser] = useState(false); // 低評価状態
-  const [authorProfile, setAuthorProfile] = useState<{ profileImage?: string | null } | null>(null);
+  const [authorProfile, setAuthorProfile] = useState<{ 
+    profileImage?: string | null,
+    selectedBadge?: string | null  // selectedBadgeプロパティを追加
+  } | null>(null);
   const [counts, setCounts] = useState<{ likeCount: number; usefulCount: number; dislikeCount?: number }>({ 
     likeCount: 0, 
     usefulCount: 0,
@@ -106,13 +111,16 @@ export default function WikiArticleContent() {
     fetchArticleData();
   }, [articleId]);
   
-  // 著者のプロフィール情報を取得
+  // 著者のプロフィール情報を取得 - バッジ情報も取得するように修正
   useEffect(() => {
     const fetchAuthorProfile = async () => {
       if (article?.authorId) {
         try {
           const profile = await getUserProfile(article.authorId);
-          setAuthorProfile(profile);
+          setAuthorProfile({
+            profileImage: profile?.profileImage,
+            selectedBadge: profile?.selectedBadge  // バッジ情報を保存
+          });
         } catch (error) {
           console.error("著者プロフィールの取得に失敗:", error);
         }
@@ -376,15 +384,27 @@ export default function WikiArticleContent() {
         <div className="flex flex-wrap justify-between items-center text-sm text-slate-300 mb-6 gap-y-2">
           <Link href={`/wiki/user?id=${article.authorId}`}>
             <div className="flex items-center hover:text-white transition-colors">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden mr-2">
-                {authorProfile?.profileImage ? (
-                  <img
-                    src={authorProfile.profileImage}
-                    alt={article.author || "ユーザー"}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <FiUser className="text-lg" />
+              <div className="relative mr-4"> {/* mr-2からmr-4に変更 */}
+                <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden">
+                  {authorProfile?.profileImage ? (
+                    <img
+                      src={authorProfile.profileImage}
+                      alt={article.author || "ユーザー"}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <FiUser className="text-lg" />
+                  )}
+                </div>
+                
+                {/* バッジ表示を追加 */}
+                {authorProfile?.selectedBadge && (
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-slate-800/90 border border-slate-700 flex items-center justify-center">
+                    <BadgeIcon 
+                      badgeId={authorProfile.selectedBadge} 
+                      size="sm"
+                    />
+                  </div>
                 )}
               </div>
               <span>{article.author || "不明なユーザー"}</span>
