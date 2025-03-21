@@ -8,7 +8,7 @@ import Image from "next/image";
 import { useAuth } from "../context/AuthContext";
 import ImageUploader from "./ImageUploader";
 import MarkdownPreview from "./MarkdownPreview";
-import { getArticleById, updateArticle, deleteArticle, WikiArticle, getAllTags, updateTags, decrementTags, Tag } from "../firebase/wiki";
+import { getArticleById, updateArticle, deleteArticle, WikiArticle, getAllTags, updateTags, decrementTags, Tag, getArticleCountById } from "../firebase/wiki";
 import { deleteImage } from "../imgbb/api";
 import MarkdownToolbar from "./MarkdownToolbar";
 
@@ -52,6 +52,8 @@ export default function EditWikiPageClient() {
   // 削除確認モーダルのステート
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [initialArticle, setInitialArticle] = useState<WikiArticle | null>(null);
 
   // 全角文字を考慮した文字数カウント関数を修正
   const countFullWidthChars = (str: string): number => {
@@ -113,6 +115,7 @@ export default function EditWikiPageClient() {
           return;
         }
         
+        setInitialArticle(article); // 初期記事データを保存
         setTitle(article.title);
         setContent(article.content);
         setDescription(article.description || "");
@@ -422,6 +425,44 @@ export default function EditWikiPageClient() {
       setIsDeleting(false);
     }
   };
+
+  async function saveArticle(articleData: Partial<WikiArticle>): Promise<string | null> {
+    try {
+      setIsSubmitting(true);
+      
+      // 既存記事の更新
+      if (articleData.id) {
+        // 評価値関連データはsearchDBからのみ取得する
+        if (initialArticle) {
+          const counts = await getArticleCountById(articleData.id);
+          // 評価カウントをsearchDBの値で上書き
+          articleData.likeCount = counts.likeCount;
+          articleData.usefulCount = counts.usefulCount;
+          articleData.dislikeCount = counts.dislikeCount;
+        }
+        
+        await updateArticle(articleData.id, articleData);
+        return articleData.id;
+      } 
+      // 新規記事
+      else {
+        // 新規記事は評価値を0に初期化（searchDBにのみ保存される）
+        articleData.likeCount = 0;
+        articleData.usefulCount = 0;
+        articleData.dislikeCount = 0;
+        
+        // articleIdが必要なため、ここでは呼び出さない
+        return null;
+      }
+      
+    } catch (error) {
+      console.error("記事の保存エラー:", error);
+      setError("記事の保存に失敗しました。もう一度お試しください。");
+      return null;
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-indigo-900 text-white">

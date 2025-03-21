@@ -22,7 +22,8 @@ import {
   addComment,
   addReply,
   incrementCommentLikeCount,
-  incrementReplyLikeCount
+  incrementReplyLikeCount,
+  getArticleCountById
 } from "../firebase/wiki";
 import { User } from "firebase/auth";
 import { getUserProfile } from "../firebase/user";
@@ -470,6 +471,21 @@ export default function WikiComments({ articleId, user, articleTitle, articleAut
       console.error("ユーザープロフィールの取得に失敗:", error);
     }
   };
+
+  // 記事の最新評価情報を取得
+  useEffect(() => {
+    const fetchArticleCounts = async () => {
+      try {
+        const counts = await getArticleCountById(articleId);
+        // このコンポーネントではカウントを表示しないが、
+        // 必要に応じてここでカウントを更新できる
+      } catch (error) {
+        console.error('記事カウント取得エラー:', error);
+      }
+    };
+    
+    fetchArticleCounts();
+  }, [articleId]);
 
   // コメントと返信のユーザープロフィールを取得
   useEffect(() => {

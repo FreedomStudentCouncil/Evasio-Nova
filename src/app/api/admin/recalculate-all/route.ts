@@ -141,12 +141,6 @@ async function recalculateArticleScores() {
 // 著者スコアの再計算
 async function recalculateAuthorStats() {
   const authorCountsRef = doc(searchDb, 'counts', 'author');
-  const authorCountsDoc = await getDoc(authorCountsRef);
-  let authorCounts: {[key: string]: any} = {};
-  
-  if (authorCountsDoc.exists()) {
-    authorCounts = authorCountsDoc.data().counts || {};
-  }
   
   // すべての著者IDを取得
   const authorsQuery = query(collection(db, 'users'));
@@ -154,6 +148,7 @@ async function recalculateAuthorStats() {
   const authorIds = authorsSnapshot.docs.map(doc => doc.id);
 
   const updatedAuthors = [];
+  const authorCounts: {[key: string]: any} = {};
   
   // 各著者の統計を再計算
   for (const authorId of authorIds) {
@@ -176,8 +171,10 @@ async function recalculateAuthorStats() {
       let likeCount = 0;
       let usefulCount = 0;
       
+      // 記事ごとのスコアを正確に集計
       authorArticlesSnapshot.forEach(doc => {
         const data = doc.data();
+        // 必ず articleScore フィールドを使用（undefinedの場合は0とする）
         scoreSum += data.articleScore || 0;
         articleCount++;
         likeCount += data.likeCount || 0;
@@ -204,8 +201,8 @@ async function recalculateAuthorStats() {
     }
   }
   
-  // 著者カウンテータを更新
-  await updateDoc(authorCountsRef, {
+  // 著者カウンテータを完全に置き換え（マージしない）
+  await setDoc(authorCountsRef, {
     counts: authorCounts,
     lastUpdated: Date.now()
   });

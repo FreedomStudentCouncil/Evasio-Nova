@@ -1,21 +1,7 @@
-import {
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  Timestamp,
-  increment,
-  limit,
-  collection,
-  addDoc,
-  query,
-  where,
-  orderBy,
-  getDocs
-} from 'firebase/firestore';
+import { collection, doc, addDoc, getDocs, query, where, orderBy, limit, deleteDoc, updateDoc, Timestamp, writeBatch } from 'firebase/firestore';
 import { db } from './config';
 import { NotificationType, Notification, NotificationResponse } from '../types/notification';
-
+import { getDoc } from 'firebase/firestore';
 const INFO_COLLECTION = 'info';
 const NOTIFICATIONS_DOC = 'notifications';
 const MAX_NOTIFICATIONS = 20; // 1ユーザーあたりの最大通知数
@@ -24,81 +10,50 @@ const MAX_NOTIFICATIONS = 20; // 1ユーザーあたりの最大通知数
 const DEBUG = true;
 
 // 通知を追加
-export async function addNotification(notification: Omit<Notification, 'id' | 'createdAt' | 'isRead' | 'read'>): Promise<void> {
-  if (DEBUG) console.log('通知追加開始:', notification);
-
+export async function addNotification(notification: Omit<Notification, 'id' | 'createdAt' | 'isRead' | 'read'>): Promise<string> {
   try {
-    const notificationsRef = doc(db, INFO_COLLECTION, NOTIFICATIONS_DOC);
-    const notificationDoc = await getDoc(notificationsRef);
+    const notificationRef = collection(db, 'notifications');
     
-    // 新しい通知オブジェクトを作成
-    const newNotification = {
+    const notificationData = {
       ...notification,
-      id: crypto.randomUUID(),
-      createdAt: Timestamp.now(),
       isRead: false,
-      read: false
+      read: false, // 後方互換性のため
+      createdAt: Timestamp.now()
     };
     
-    if (DEBUG) console.log('作成した通知オブジェクト:', newNotification);
-
-    if (!notificationDoc.exists()) {
-      // 初めての通知の場合、ドキュメントを新規作成
-      if (DEBUG) console.log('通知ドキュメントが存在しないため新規作成します');
-      
-      await setDoc(notificationsRef, {
-        notifications: {
-          [notification.userId]: {
-            items: [newNotification],
-            unreadCount: 1
-          }
-        }
-      });
-      
-      if (DEBUG) console.log('通知ドキュメントを新規作成しました');
-    } else {
-      // 既存の通知ドキュメントが存在する場合
-      const userData = notificationDoc.data()?.notifications?.[notification.userId];
-      
-      if (userData) {
-        // 既存のユーザーデータがある場合
-        if (DEBUG) console.log('既存のユーザー通知データを更新します:', notification.userId);
-        
-        // 通知配列を取得（存在しない場合は空配列）
-        const currentItems = userData.items || [];
-        
-        // 新しい通知を先頭に追加して、最大件数に制限
-        const updatedItems = [newNotification, ...currentItems].slice(0, MAX_NOTIFICATIONS);
-        
-        await updateDoc(notificationsRef, {
-          [`notifications.${notification.userId}.items`]: updatedItems,
-          [`notifications.${notification.userId}.unreadCount`]: increment(1)
-        });
-        
-        if (DEBUG) console.log('ユーザーの通知を更新しました。件数:', updatedItems.length);
-      } else {
-        // ユーザーのデータがまだない場合は新しく作成
-        if (DEBUG) console.log('ユーザーの通知データを新規作成します:', notification.userId);
-        
-        await updateDoc(notificationsRef, {
-          [`notifications.${notification.userId}`]: {
-            items: [newNotification],
-            unreadCount: 1
-          }
-        });
-        
-        if (DEBUG) console.log('ユーザーの通知データを作成しました');
-      }
-    }
+    const docRef = await addDoc(notificationRef, notificationData);
+    return docRef.id;
   } catch (error) {
-    console.error('通知の追加に失敗:', error);
-    if (error instanceof Error) {
-      console.error('エラーメッセージ:', error.message);
-      console.error('エラースタック:', error.stack);
-    }
+    console.error('通知の追加に失敗しました:', error);
     throw error;
   }
 }
+
+// 既存の関数...
+
+// トロフィー獲得通知を送信する関数
+export async function sendTrophyNotification(userId: string, trophyId: string, trophyTitle: string) {
+  return addNotification({
+    userId,
+    type: 'trophy',
+    content: `新しいトロフィー「${trophyTitle}」を獲得しました！`,
+    date: new Date(),
+    trophyId
+  });
+}
+
+// バッジ獲得通知を送信する関数
+export async function sendBadgeNotification(userId: string, badgeId: string, badgeTitle: string) {
+  return addNotification({
+    userId,
+    type: 'badge',
+    content: `新しいバッジ「${badgeTitle}」を獲得しました！`,
+    date: new Date(),
+    badgeId
+  });
+}
+
+// 残りの既存の関数...
 
 // ユーザーの通知を取得
 export async function getUserNotifications(userId: string): Promise<NotificationResponse> {
@@ -229,54 +184,6 @@ export async function pruneOldNotifications(userId: string): Promise<void> {
     if (DEBUG) console.log(`古い通知を整理しました: ${userId} (${items.length} -> ${sortedItems.length}件)`);
   } catch (error) {
     console.error('古い通知の整理に失敗:', error);
-  }
-}
-
-/**
- * バッジ獲得の通知を送る
- * @param userId ユーザーID 
- * @param badgeId バッジID
- * @param badgeName バッジ名
- */
-export async function sendBadgeNotification(
-  userId: string,
-  badgeId: string,
-  badgeName: string
-): Promise<void> {
-  try {
-    await addNotification({
-      userId,
-      type: 'badge', 
-      badgeId,
-      badgeName,
-      date: new Date()
-    });
-  } catch (error) {
-    console.error('バッジ通知追加エラー:', error);
-  }
-}
-
-/**
- * トロフィー獲得の通知を送る
- * @param userId ユーザーID
- * @param trophyId トロフィーID
- * @param trophyName トロフィー名
- */
-export async function sendTrophyNotification(
-  userId: string,
-  trophyId: string,
-  trophyName: string
-): Promise<void> {
-  try {
-    await addNotification({
-      userId,
-      type: 'trophy',
-      trophyId,
-      trophyName,
-      date: new Date()
-    });
-  } catch (error) {
-    console.error('トロフィー通知追加エラー:', error);
   }
 }
 

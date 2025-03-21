@@ -27,6 +27,7 @@ export default function AdminSystemClient() {
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
   const [clearingCache, setClearingCache] = useState(false);
   const [rebuildingIndex, setRebuildingIndex] = useState(false);
+  const [syncingAuthorStats, setSyncingAuthorStats] = useState(false);
   const [operationResult, setOperationResult] = useState<{
     success: boolean;
     message: string;
@@ -194,6 +195,49 @@ export default function AdminSystemClient() {
       });
     } finally {
       setRebuildingIndex(false);
+    }
+  };
+
+  // 著者スコア同期処理
+  const handleSyncAuthorStats = async () => {
+    if (syncingAuthorStats) return;
+    
+    setSyncingAuthorStats(true);
+    setOperationResult(null);
+    
+    try {
+      const token = await getIdToken();
+      
+      const response = await fetch('/api/admin/sync-author-stats', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'User-Id': user?.uid || ''
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '著者スコア同期中にエラーが発生しました');
+      }
+      
+      const result = await response.json();
+      
+      setOperationResult({
+        success: true,
+        message: `著者スコアを同期しました (${result.processed}件処理, ${result.errors}件エラー)`,
+        type: 'sync'
+      });
+    } catch (error) {
+      console.error('著者スコア同期エラー:', error);
+      setOperationResult({
+        success: false,
+        message: error instanceof Error ? error.message : '不明なエラーが発生しました',
+        type: 'sync'
+      });
+    } finally {
+      setSyncingAuthorStats(false);
     }
   };
 
@@ -384,6 +428,59 @@ export default function AdminSystemClient() {
                   </button>
                   
                   {operationResult && operationResult.type === 'index' && (
+                    <div className={`mt-4 p-3 rounded-lg text-sm ${
+                      operationResult.success 
+                        ? 'bg-green-500/20 text-green-400' 
+                        : 'bg-red-500/20 text-red-400'
+                    }`}>
+                      <div className="flex items-start gap-2">
+                        {operationResult.success ? (
+                          <FiCheck className="mt-0.5" />
+                        ) : (
+                          <FiAlertTriangle className="mt-0.5" />
+                        )}
+                        <span>{operationResult.message}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 著者スコア同期 - 新しく追加 */}
+                <div className="bg-white/5 rounded-lg p-6 border border-white/10">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-3 rounded-full bg-indigo-500/20">
+                      <FiUsers className="text-indigo-400" />
+                    </div>
+                    <h3 className="text-lg font-bold">著者スコア同期</h3>
+                  </div>
+                  
+                  <p className="text-slate-300 mb-4">
+                    著者スコアの合計値を全記事から計算し直して同期します。記事スコアと著者スコアに不一致がある場合に実行してください。
+                  </p>
+                  
+                  <button
+                    onClick={handleSyncAuthorStats}
+                    disabled={syncingAuthorStats}
+                    className={`w-full py-3 rounded-lg font-medium ${
+                      syncingAuthorStats 
+                        ? 'bg-slate-600/50 text-slate-300 cursor-not-allowed' 
+                        : 'bg-indigo-500/80 hover:bg-indigo-500 text-white'
+                    }`}
+                  >
+                    {syncingAuthorStats ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                        <span>処理中...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2">
+                        <FiRefreshCw />
+                        <span>著者スコアを同期</span>
+                      </div>
+                    )}
+                  </button>
+                  
+                  {operationResult && operationResult.type === 'sync' && (
                     <div className={`mt-4 p-3 rounded-lg text-sm ${
                       operationResult.success 
                         ? 'bg-green-500/20 text-green-400' 

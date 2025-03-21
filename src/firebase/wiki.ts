@@ -102,7 +102,26 @@ export async function getArticleById(id: string): Promise<WikiArticle | null> {
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
-      return { id: docSnap.id, ...docSnap.data() } as WikiArticle;
+      const mainData = { id: docSnap.id, ...docSnap.data() } as WikiArticle;
+      
+      // 評価データを検索DBから取得して補完
+      try {
+        const summaryRef = doc(searchDb, 'articleSummaries', id);
+        const summarySnap = await getDoc(summaryRef);
+        
+        if (summarySnap.exists()) {
+          const summaryData = summarySnap.data();
+          // 評価関連データを検索DBから取得
+          mainData.likeCount = summaryData.likeCount || 0;
+          mainData.usefulCount = summaryData.usefulCount || 0;
+          mainData.dislikeCount = summaryData.dislikeCount || 0;
+          mainData.articleScore = summaryData.articleScore || 0;
+        }
+      } catch (error) {
+        console.warn('検索DB補完エラー:', error);
+      }
+      
+      return mainData;
     }
     
     return null;
@@ -213,11 +232,10 @@ export async function createArticle(article: Omit<WikiArticle, 'id'>): Promise<s
     
     // メインDB用のデータから評価関連データを除外
     const mainDbArticle = { ...article };
-    // オプショナルプロパティに対して安全に削除する
-    if ('usefulCount' in mainDbArticle) delete (mainDbArticle as any).usefulCount;
-    if ('likeCount' in mainDbArticle) delete (mainDbArticle as any).likeCount;
-    if ('dislikeCount' in mainDbArticle) delete (mainDbArticle as any).dislikeCount;
-    if ('articleScore' in mainDbArticle) delete (mainDbArticle as any).articleScore;
+    delete (mainDbArticle as any).usefulCount;
+    delete (mainDbArticle as any).likeCount;
+    delete (mainDbArticle as any).dislikeCount;
+    delete (mainDbArticle as any).articleScore;
     
     // 1. メインDBに完全な記事データを保存（評価関連データを除く）
     try {
@@ -251,6 +269,7 @@ export async function createArticle(article: Omit<WikiArticle, 'id'>): Promise<s
         lastUpdated: now,
         usefulCount: article.usefulCount || 0,
         likeCount: article.likeCount || 0,
+        dislikeCount: article.dislikeCount || 0,
         articleScore // 記事スコアを追加
       });
       console.log("検索用DBへの保存完了");
@@ -294,13 +313,23 @@ export async function updateArticle(id: string, updateData: Partial<WikiArticle>
       throw new Error("記事が見つかりません");
     }
     
+    // searchDBから最新の評価データを取得
+    const summaryRef = doc(searchDb, 'articleSummaries', id);
+    const summarySnap = await getDoc(summaryRef);
+    const summaryData = summarySnap.exists() ? summarySnap.data() : null;
+    
+    // 最新の評価データを使用
+    const currentLikes = summaryData?.likeCount || 0;
+    const currentUseful = summaryData?.usefulCount || 0;
+    const currentDislikes = summaryData?.dislikeCount || 0;
+    
     // 更新されるデータを含めた記事内容でスコアを再計算
     const updatedContent = updateData.content || article.content;
     const articleScore = calculateArticleScore(
       updatedContent,
-      article.likeCount,
-      article.usefulCount,
-      article.dislikeCount || 0
+      currentLikes,
+      currentUseful,
+      currentDislikes
     );
     
     // メインDB更新用データを作成（評価カウントとスコアは除外）
@@ -309,18 +338,17 @@ export async function updateArticle(id: string, updateData: Partial<WikiArticle>
       lastUpdated: now
     };
     
-    // 評価関連データはメインDBから削除 (オプショナルとして安全に削除)
-    if ('usefulCount' in mainDbUpdateData) delete (mainDbUpdateData as any).usefulCount;
-    if ('likeCount' in mainDbUpdateData) delete (mainDbUpdateData as any).likeCount;
-    if ('dislikeCount' in mainDbUpdateData) delete (mainDbUpdateData as any).dislikeCount;
-    if ('articleScore' in mainDbUpdateData) delete (mainDbUpdateData as any).articleScore;
+    // 評価関連データはメインDBから削除
+    delete (mainDbUpdateData as any).usefulCount;
+    delete (mainDbUpdateData as any).likeCount;
+    delete (mainDbUpdateData as any).dislikeCount;
+    delete (mainDbUpdateData as any).articleScore;
     
     // 1. メインDBの記事を更新
     const docRef = doc(db, 'wikiArticles', id);
     await updateDoc(docRef, mainDbUpdateData);
     
     // 2. 検索用DBの記事概要も更新（関連フィールドのみ）
-    const summaryRef = doc(searchDb, 'articleSummaries', id);
     const summaryUpdateData: Partial<ArticleSummary> = { 
       lastUpdated: now,
       articleScore // 更新されたスコアを追加
@@ -328,7 +356,7 @@ export async function updateArticle(id: string, updateData: Partial<WikiArticle>
     
     // 検索用DBに関連するフィールドだけを抽出
     const relevantFields: (keyof ArticleSummary)[] = [
-      'title', 'description', 'tags', 'author', 'imageUrl', 'usefulCount', 'likeCount'
+      'title', 'description', 'tags', 'author', 'imageUrl'
     ];
     
     relevantFields.forEach(field => {
@@ -339,6 +367,11 @@ export async function updateArticle(id: string, updateData: Partial<WikiArticle>
     
     if (Object.keys(summaryUpdateData).length > 1) { // lastUpdated以外にも更新するフィールドがある場合
       await updateDoc(summaryRef, summaryUpdateData);
+    }
+    
+    // 著者スコアを更新
+    if (article.authorId) {
+      await updateAuthorScore(article.authorId, id, articleScore);
     }
   } catch (error) {
     console.error('記事更新エラー:', error);
@@ -461,6 +494,9 @@ export async function incrementUsefulCount(id: string): Promise<void> {
         usefulCount: increment(1),
         articleScore: newScore
       });
+      
+      // 著者スコアを更新
+      await updateAuthorScore(authorId, id, newScore);
       
       // キャッシュも更新（もし存在すれば）
       try {
@@ -601,6 +637,9 @@ export async function incrementLikeCount(id: string): Promise<void> {
         articleScore: newScore
       });
       
+      // 著者スコアを更新
+      await updateAuthorScore(authorId, id, newScore);
+      
       // キャッシュも更新（もし存在すれば）
       try {
         await cacheManager.updateArticleCount(
@@ -724,6 +763,9 @@ export async function incrementDislikeCount(id: string, isAdmin: boolean = false
     
     // 記事データを取得しスコアを再計算
     const article = await getArticleById(id);
+    if (!article?.authorId) throw new Error('Article or author not found');
+    const authorId = article.authorId;
+    
     const articleSummaryRef = doc(searchDb, 'articleSummaries', id);
     
     if (article) {
@@ -740,6 +782,9 @@ export async function incrementDislikeCount(id: string, isAdmin: boolean = false
         dislikeCount: increment(1),
         articleScore: newScore
       });
+      
+      // 著者スコアを更新
+      await updateAuthorScore(authorId, id, newScore);
       
       // メインDBは更新しない
     } else {
@@ -1216,6 +1261,66 @@ export async function updateAuthorScoreOnArticleCreate(authorId: string, article
         lastUpdated: Date.now()
       });
     }
+  } catch (error) {
+    console.error('著者スコア更新エラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * 著者のスコア情報を更新する
+ * @param authorId 著者ID
+ * @param articleId 記事ID
+ * @param newScore 新しいスコア値
+ */
+export async function updateAuthorScore(authorId: string, articleId: string, newScore: number): Promise<void> {
+  try {
+    const authorCountsRef = doc(searchDb, 'counts', 'author');
+    const authorCountsDoc = await getDoc(authorCountsRef);
+    
+    // 該当著者のすべての記事を取得してスコア再計算
+    const authorArticlesQuery = query(
+      collection(searchDb, 'articleSummaries'),
+      where('authorId', '==', authorId)
+    );
+    
+    const authorArticlesSnapshot = await getDocs(authorArticlesQuery);
+    let scoreSum = 0;
+    let articleCount = 0;
+    let likeCount = 0;
+    let usefulCount = 0;
+    
+    // すべての記事からスコア合計を計算
+    authorArticlesSnapshot.forEach(doc => {
+      const data = doc.data();
+      
+      // 特定の記事IDの場合は新しいスコアを使用
+      if (doc.id === articleId) {
+        scoreSum += newScore;
+      } else {
+        scoreSum += data.articleScore || 0;
+      }
+      
+      articleCount++;
+      likeCount += data.likeCount || 0;
+      usefulCount += data.usefulCount || 0;
+    });
+    
+    // 著者のスコア情報を更新
+    const authorCounts = authorCountsDoc.exists() ? authorCountsDoc.data().counts || {} : {};
+    
+    authorCounts[authorId] = {
+      likeCount,
+      usefulCount,
+      articleScoreSum: scoreSum,
+      articleCount
+    };
+    
+    await setDoc(authorCountsRef, {
+      counts: authorCounts,
+      lastUpdated: Date.now()
+    }, { merge: true });
+    
   } catch (error) {
     console.error('著者スコア更新エラー:', error);
     throw error;

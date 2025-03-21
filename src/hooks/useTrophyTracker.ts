@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Trophy, calculateUserTrophies, UserStats, Badge, getAvailableBadges } from '../utils/trophies';
+import { Trophy, calculateUserTrophies, UserStats, Badge, getAvailableBadges, allTrophies } from '../utils/trophies';
 import { sendTrophyNotification, sendBadgeNotification } from '../firebase/notification';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { db, searchDb } from '../firebase/config';
+import { getAuthorCountById } from '../firebase/wiki';
 
 interface UseTrophyTrackerProps {
   userId: string;
@@ -119,5 +122,88 @@ export default function useTrophyTracker({
     availableBadges,
     newTrophies,
     clearNewTrophies
+  };
+}
+
+// 異なるインターフェイスの別の関数として定義（オーバーロードとして扱う）
+interface SimpleTrophyTrackerProps {
+  userId: string | null;
+  isActive?: boolean;
+}
+
+export function useTrophyTrackerSimple({ userId, isActive = true }: SimpleTrophyTrackerProps) {
+  const [earnedTrophies, setEarnedTrophies] = useState<Trophy[]>([]);
+  const [availableBadges, setAvailableBadges] = useState<Badge[]>([]);
+  const [selectedBadge, setSelectedBadge] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  useEffect(() => {
+    const fetchUserTrophies = async () => {
+      if (!userId) {
+        setIsLoading(false);
+        return;
+      }
+      
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        // ユーザードキュメントからトロフィー情報を取得
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        
+        if (!userDoc.exists()) {
+          throw new Error('ユーザーが見つかりません');
+        }
+        
+        const userData = userDoc.data();
+        const currentSelectedBadge = userData.selectedBadge || null;
+        
+        // 著者統計情報をsearchDBから取得
+        const authorStats = await getAuthorCountById(userId);
+        
+        // ユーザー統計情報
+        const userStats = {
+          likeCount: authorStats.likeCount || 0,
+          usefulCount: authorStats.usefulCount || 0,
+          articleCount: authorStats.articleCount || 0,
+          averageScore: authorStats.averageScore || 0,
+          totalScore: authorStats.articleScoreSum || 0
+        };
+        
+        // 獲得済みトロフィーIDリスト
+        const earnedTrophyIds = userData.earnedTrophies || [];
+        
+        // トロフィーオブジェクトのリストに変換
+        const trophiesArray = allTrophies.filter(trophy => 
+          earnedTrophyIds.includes(trophy.id)
+        );
+        
+        // 管理者かどうかを確認
+        const isAdmin = userData.isAdmin || userData.email === "egnm9stasshe@gmail.com";
+        
+        // 使用可能なバッジを計算
+        const badges = getAvailableBadges(userStats, isAdmin);
+        
+        setEarnedTrophies(trophiesArray);
+        setAvailableBadges(badges);
+        setSelectedBadge(currentSelectedBadge);
+      } catch (err) {
+        console.error('トロフィー取得エラー:', err);
+        setError(err instanceof Error ? err.message : '不明なエラーが発生しました');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchUserTrophies();
+  }, [userId]);
+
+  return {
+    earnedTrophies,
+    availableBadges,
+    selectedBadge,
+    isLoading,
+    error
   };
 }

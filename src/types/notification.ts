@@ -1,33 +1,27 @@
 import { Timestamp } from 'firebase/firestore';
 
-// 通知タイプの定義（バッジとトロフィーを追加）
-export type NotificationType = 'comment' | 'reply' | 'like' | 'badge' | 'trophy';
+// 通知タイプの定義
+export type NotificationType = 'like' | 'comment' | 'reply' | 'follow' | 'trophy' | 'badge' | 'useful';
 
 // 通知インターフェース
 export interface Notification {
   id?: string;
   userId: string;
   type: NotificationType;
-  date: Timestamp | Date;
+  content: string;
+  date: Date;
   createdAt?: Timestamp;
-  isRead: boolean;
-  read?: boolean;
-  
-  // コメント、返信、いいね共通
-  articleId?: string;
-  articleTitle?: string;
+  isRead?: boolean;
+  read?: boolean; // 後方互換性のため
   senderId?: string;
   senderName?: string;
-  content?: string;
-  
-  // バッジと実績特有
-  badgeId?: string;
-  badgeName?: string;
+  articleId?: string;
+  articleTitle?: string;
   trophyId?: string;
-  trophyName?: string;
+  badgeId?: string;
 }
 
-// 通知レスポンスの型定義
+// 通知レスポンスインターフェース
 export interface NotificationResponse {
   notifications: Notification[];
   unreadCount: number;
